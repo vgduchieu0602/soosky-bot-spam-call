@@ -1,4 +1,5 @@
 import express, { NextFunction, Request, RequestHandler, Response } from "express";
+import type { Server as HttpServer } from "node:http";
 import ServiceUnhealthyError from "../domain/errors/ServiceUnhealthyError";
 import GetComplaintHistoryUseCase from "../domain/use-cases/complaints/GetComplaintHistoryUseCase";
 import GetComplaintReputationUseCase from "../domain/use-cases/complaints/GetComplaintReputationUseCase";
@@ -7,6 +8,7 @@ import CheckHealthUseCase from "../domain/use-cases/health/CheckHealthUseCase";
 import { InvalidE164PhoneError } from "../domain/value-objects/E164Phone";
 import ClientError from "./ClientError";
 import formatResponseData from "./formatResponseData";
+import RateLimiter from "./RateLimiter";
 
 export type ServerUseCases = {
     complaints: {
@@ -21,12 +23,15 @@ export type ServerUseCases = {
 
 type ServerOptions = {
     corsOrigin: string;
+    /** Uptime probes hit this path far more often than clients hit the API, so it is not rate limited. */
+    rateLimitExemptPath: string;
 };
 
 export { Server as default };
 
 class Server {
     private readonly _server = express();
+    private _listener: HttpServer | null = null;
     private readonly _routes: [string, string, ...RequestHandler[]][] = [
         ["GET", "/health", this._GET_health.bind(this)],
         ["GET", "/api/v1/complaints", this._GET_complaints.bind(this)],
@@ -34,7 +39,11 @@ class Server {
         ["GET", "/api/v1/spam-numbers", this._GET_spamNumbers.bind(this)],
     ];
 
-    constructor (private _useCases: ServerUseCases, private _options: ServerOptions) {
+    constructor (
+        private _useCases: ServerUseCases,
+        private _rateLimiter: RateLimiter,
+        private _options: ServerOptions,
+    ) {
         this._registerRouter();
         this._registerErrorHandler();
     }
@@ -43,6 +52,22 @@ class Server {
         return new Promise((resolve, reject) => {
             const listener = this._server.listen(port, host, () => resolve());
             listener.once("error", reject);
+            this._listener = listener;
+        });
+    }
+
+    /** Stops accepting connections, lets in-flight requests finish, then drops whatever is still open. */
+    public close (timeoutMs: number): Promise<void> {
+        const listener = this._listener;
+        if (!listener) return Promise.resolve();
+        this._listener = null;
+        return new Promise((resolve) => {
+            const forceTimer = setTimeout(() => listener.closeAllConnections(), timeoutMs);
+            listener.close(() => {
+                clearTimeout(forceTimer);
+                resolve();
+            });
+            listener.closeIdleConnections();
         });
     }
 
@@ -50,6 +75,7 @@ class Server {
         this._server.set("trust proxy", 1);
         this._server.use(express.json({ limit: "64kb" }));
         this._server.use(this._cors.bind(this));
+        this._server.use(this._rateLimit.bind(this));
         for (const [method, path, ...handlers] of this._routes) {
             (this._server as any)[method.toLowerCase()](path, ...handlers);
         }
@@ -97,6 +123,25 @@ class Server {
         if (req.method === "OPTIONS") {
             res.status(204).end();
             return;
+        }
+        next();
+    }
+
+    private _rateLimit (req: Request, res: Response, next: NextFunction): void {
+        if (req.path === this._options.rateLimitExemptPath) {
+            next();
+            return;
+        }
+
+        const now = Date.now();
+        const result = this._rateLimiter.consume(req.ip || req.socket.remoteAddress || "unknown", now);
+        const resetSeconds = Math.max(0, Math.ceil((result.resetAt - now) / 1000));
+        res.setHeader("RateLimit-Limit", result.limit);
+        res.setHeader("RateLimit-Remaining", result.remaining);
+        res.setHeader("RateLimit-Reset", resetSeconds);
+        if (!result.allowed) {
+            res.setHeader("Retry-After", resetSeconds);
+            throw new ClientError(`Too many requests. Retry in ${resetSeconds}s.`, 429, "RATE_LIMITED");
         }
         next();
     }

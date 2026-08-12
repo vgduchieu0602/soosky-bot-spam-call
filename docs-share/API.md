@@ -3,6 +3,25 @@
 Base URL: `http://<host>:<port>`  
 Response envelope: success `{ "ok": true, "data": ... }`; error `{ "ok": false, "code": "...", "reason": "..." }`.
 
+## Rate limit
+
+Giới hạn theo IP, fixed window, mặc định **60 request / 60 giây** (`HTTP_RATE_LIMIT_MAX`, `HTTP_RATE_LIMIT_WINDOW_MS`). `GET /health` được miễn.
+
+| Header | Ý nghĩa |
+|---|---|
+| `RateLimit-Limit` | Số request tối đa trong window |
+| `RateLimit-Remaining` | Số request còn lại của window hiện tại |
+| `RateLimit-Reset` | Số giây tới khi window reset |
+| `Retry-After` | Chỉ có ở response `429`, số giây nên chờ |
+
+**Output 429**
+
+```json
+{ "ok": false, "code": "RATE_LIMITED", "reason": "Too many requests. Retry in 42s." }
+```
+
+Bộ đếm in-memory theo từng process, nên khi scale nhiều instance thì ngưỡng thực tế nhân theo số instance.
+
 ## Data refresh
 
 - Source: FTC DNC Reported Calls API (`GET /v0/dnc-complaints`), authenticated by `FTC_API_KEY` header. Không crawl HTML/web page.

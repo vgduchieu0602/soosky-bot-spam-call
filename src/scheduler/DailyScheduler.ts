@@ -1,6 +1,6 @@
 export default class DailyScheduler {
     private _timer: ReturnType<typeof setTimeout> | null = null;
-    private _running = false;
+    private _current: Promise<void> | null = null;
     private readonly _formatter: Intl.DateTimeFormat;
 
     constructor (
@@ -22,9 +22,14 @@ export default class DailyScheduler {
         this._scheduleNext();
     }
 
-    public stop (): void {
+    /** Cancels the next run and waits for the sync in flight so nothing writes after Mongo disconnects. */
+    public async stop (): Promise<void> {
         if (this._timer) clearTimeout(this._timer);
         this._timer = null;
+        if (this._current) {
+            console.log("[scheduler] waiting for the FTC sync in flight to finish.");
+            await this._current;
+        }
     }
 
     private _scheduleNext (): void {
@@ -45,18 +50,22 @@ export default class DailyScheduler {
         throw new Error("Could not calculate the next daily FTC sync.");
     }
 
-    private async _run (): Promise<void> {
-        if (this._running) {
+    private _run (): Promise<void> {
+        if (this._current) {
             console.warn("[scheduler] previous FTC sync is still running; skip overlapping run.");
-            return;
+            return this._current;
         }
-        this._running = true;
+        this._current = this._execute().finally(() => {
+            this._current = null;
+        });
+        return this._current;
+    }
+
+    private async _execute (): Promise<void> {
         try {
             await this._task();
         } catch (error) {
             console.error(`[scheduler] FTC sync failed: ${this._errorMessage(error)}`);
-        } finally {
-            this._running = false;
         }
     }
 

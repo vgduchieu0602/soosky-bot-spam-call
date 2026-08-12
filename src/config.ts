@@ -48,5 +48,11 @@ const config = {
         port: boundedInt(process.env.HTTP_PORT, 3000, 1, 65535),
         host: process.env.HTTP_HOST || "0.0.0.0",
         corsOrigin: process.env.HTTP_CORS_ORIGIN || "*",
+        shutdownTimeoutMs: boundedInt(process.env.HTTP_SHUTDOWN_TIMEOUT_MS, 10000, 0),
+        rateLimit: {
+            windowMs: boundedInt(process.env.HTTP_RATE_LIMIT_WINDOW_MS, 60000, 1000),
+            max: boundedInt(process.env.HTTP_RATE_LIMIT_MAX, 60, 1),
+            maxTrackedKeys: boundedInt(process.env.HTTP_RATE_LIMIT_MAX_TRACKED_IPS, 50000, 1),
+        },
     },
 };

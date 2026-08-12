@@ -10,6 +10,7 @@ import GetComplaintReputationUseCase from "./domain/use-cases/complaints/GetComp
 import ListSpamNumbersUseCase from "./domain/use-cases/complaints/ListSpamNumbersUseCase";
 import CheckHealthUseCase from "./domain/use-cases/health/CheckHealthUseCase";
 import SyncDncComplaintsUseCase from "./domain/use-cases/sync/SyncDncComplaintsUseCase";
+import RateLimiter from "./http/RateLimiter";
 import Server from "./http/Server";
 import DailyScheduler from "./scheduler/DailyScheduler";
 
@@ -64,9 +65,14 @@ function subtractCalendarDays (dateString: string, days: number): string {
     return date.toISOString().slice(0, 10);
 }
 
+const rateLimiter = new RateLimiter(config.http.rateLimit);
+const server = new Server(useCases, rateLimiter, {
+    corsOrigin: config.http.corsOrigin,
+    rateLimitExemptPath: "/health",
+});
+
 (async () => {
     await connectMongo();
-    const server = new Server(useCases, { corsOrigin: config.http.corsOrigin });
     await server.listen(config.http.port, config.http.host);
     scheduler.start(config.sync.runOnBoot);
     console.log(`[app] listening on http://${config.http.host}:${config.http.port}.`);
@@ -81,8 +87,17 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
         if (shuttingDown) return;
         shuttingDown = true;
         console.log(`[app] received ${signal}; shutting down.`);
-        scheduler.stop();
+        // A stuck request or sync must not keep the process alive forever.
+        setTimeout(() => {
+            console.error("[app] graceful shutdown timed out; exiting.");
+            process.exit(1);
+        }, config.http.shutdownTimeoutMs + 5000).unref();
+        await Promise.all([
+            server.close(config.http.shutdownTimeoutMs),
+            scheduler.stop(),
+        ]).catch((error) => console.error(`[app] shutdown error: ${error instanceof Error ? error.message : String(error)}`));
         await mongoose.disconnect().catch(() => undefined);
+        console.log("[app] shutdown complete.");
         process.exit(0);
     });
 }

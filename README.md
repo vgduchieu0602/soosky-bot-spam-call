@@ -35,6 +35,13 @@ Tạo key tại [api.data.gov signup](https://api.data.gov/signup/). Không comm
 
 Mặc định service đồng bộ lúc `13:00` theo `America/New_York`, có chạy ngay khi khởi động, và luôn lấy lại 3 ngày gần nhất. Khoảng overlap này bao gồm cuối tuần/holiday và khiến lần chạy idempotent nhờ unique `ftcComplaintId`.
 
+## Rate limit và shutdown
+
+- Mỗi IP được `HTTP_RATE_LIMIT_MAX` request trong mỗi `HTTP_RATE_LIMIT_WINDOW_MS` (mặc định 60 request / 60 giây). Vượt ngưỡng trả `429 RATE_LIMITED` kèm `Retry-After`. Mọi response đều có `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`.
+- `GET /health` được miễn rate limit để uptime probe không tự làm mình bị chặn.
+- Bộ đếm nằm trong RAM của từng process. Chạy nhiều instance thì ngưỡng thực tế là `max × số instance`; cần ngưỡng dùng chung thì phải chuyển sang store ngoài (Redis).
+- `SIGTERM`/`SIGINT`: dừng scheduler và chờ lần sync đang chạy xong, đóng HTTP server nhưng vẫn để request đang xử lý hoàn tất (tối đa `HTTP_SHUTDOWN_TIMEOUT_MS`), rồi mới `mongoose.disconnect()`. Quá `HTTP_SHUTDOWN_TIMEOUT_MS + 5000` thì process tự exit `1`.
+
 ## API cho FE
 
 ### `GET /health`
@@ -93,7 +100,7 @@ Xem đầy đủ trong [.env.example](.env.example). Bắt buộc:
 - `MONGO_URI`
 - `FTC_API_KEY`
 
-Các biến quan trọng: `SYNC_TIME_ZONE`, `SYNC_HOUR`, `SYNC_MINUTE`, `SYNC_LOOKBACK_DAYS`, `HEALTH_MAX_SYNC_AGE_HOURS`, `HTTP_PORT`, `HTTP_CORS_ORIGIN`.
+Các biến quan trọng: `SYNC_TIME_ZONE`, `SYNC_HOUR`, `SYNC_MINUTE`, `SYNC_LOOKBACK_DAYS`, `HEALTH_MAX_SYNC_AGE_HOURS`, `HTTP_PORT`, `HTTP_CORS_ORIGIN`, `HTTP_RATE_LIMIT_MAX`, `HTTP_RATE_LIMIT_WINDOW_MS`, `HTTP_SHUTDOWN_TIMEOUT_MS`.
 
 ## Kiểm tra
 
