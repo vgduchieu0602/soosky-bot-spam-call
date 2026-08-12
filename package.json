@@ -1,0 +1,29 @@
+{
+    "name": "soosky-bot-spam-call",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "main": "dist/app.js",
+    "scripts": {
+        "dev": "tsx watch src/app.ts",
+        "typecheck": "tsc --noEmit",
+        "test": "tsx --test \"src/**/*.test.ts\"",
+        "build": "tsc --noEmit && esbuild src/app.ts --bundle --platform=node --format=esm --outfile=dist/app.js --packages=external",
+        "start": "node dist/app.js"
+    },
+    "engines": {
+        "node": ">=22"
+    },
+    "dependencies": {
+        "dotenv": "^17.4.2",
+        "express": "^5.1.0",
+        "mongoose": "^9.7.4"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.3",
+        "@types/node": "^24.7.2",
+        "esbuild": "^0.25.9",
+        "tsx": "^4.20.5",
+        "typescript": "^5.9.3"
+    }
+}

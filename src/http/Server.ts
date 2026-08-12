@@ -1,0 +1,200 @@
+import express, { NextFunction, Request, RequestHandler, Response } from "express";
+import ServiceUnhealthyError from "../domain/errors/ServiceUnhealthyError";
+import GetComplaintHistoryUseCase from "../domain/use-cases/complaints/GetComplaintHistoryUseCase";
+import GetComplaintReputationUseCase from "../domain/use-cases/complaints/GetComplaintReputationUseCase";
+import ListSpamNumbersUseCase from "../domain/use-cases/complaints/ListSpamNumbersUseCase";
+import CheckHealthUseCase from "../domain/use-cases/health/CheckHealthUseCase";
+import { InvalidE164PhoneError } from "../domain/value-objects/E164Phone";
+import ClientError from "./ClientError";
+import formatResponseData from "./formatResponseData";
+
+export type ServerUseCases = {
+    complaints: {
+        getComplaintHistory: GetComplaintHistoryUseCase;
+        getComplaintReputation: GetComplaintReputationUseCase;
+        listSpamNumbers: ListSpamNumbersUseCase;
+    };
+    health: {
+        checkHealth: CheckHealthUseCase;
+    };
+};
+
+type ServerOptions = {
+    corsOrigin: string;
+};
+
+export { Server as default };
+
+class Server {
+    private readonly _server = express();
+    private readonly _routes: [string, string, ...RequestHandler[]][] = [
+        ["GET", "/health", this._GET_health.bind(this)],
+        ["GET", "/api/v1/complaints", this._GET_complaints.bind(this)],
+        ["GET", "/api/v1/reputation", this._GET_reputation.bind(this)],
+        ["GET", "/api/v1/spam-numbers", this._GET_spamNumbers.bind(this)],
+    ];
+
+    constructor (private _useCases: ServerUseCases, private _options: ServerOptions) {
+        this._registerRouter();
+        this._registerErrorHandler();
+    }
+
+    public listen (port: number, host: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const listener = this._server.listen(port, host, () => resolve());
+            listener.once("error", reject);
+        });
+    }
+
+    private _registerRouter (): void {
+        this._server.set("trust proxy", 1);
+        this._server.use(express.json({ limit: "64kb" }));
+        this._server.use(this._cors.bind(this));
+        for (const [method, path, ...handlers] of this._routes) {
+            (this._server as any)[method.toLowerCase()](path, ...handlers);
+        }
+        this._server.use(() => {
+            throw new ClientError("Not Found.", 404, "NOT_FOUND");
+        });
+    }
+
+    private _registerErrorHandler (): void {
+        this._server.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+            let statusCode = 500;
+            let code = "INTERNAL_ERROR";
+            let reason = "An unexpected server error occurred.";
+            switch (true) {
+                case error instanceof ClientError:
+                    statusCode = error.statusCode;
+                    code = error.code;
+                    reason = error.message;
+                    break;
+                case error instanceof InvalidE164PhoneError:
+                    statusCode = 400;
+                    code = "INVALID_PHONE_NUMBER";
+                    reason = error.message;
+                    break;
+                case error instanceof ServiceUnhealthyError:
+                    statusCode = 503;
+                    code = error.code;
+                    reason = error.message;
+                    break;
+                default:
+                    console.error(error);
+            }
+            res.status(statusCode).json({ ok: false, code, reason });
+        });
+    }
+
+    private _cors (req: Request, res: Response, next: NextFunction): void {
+        const requestOrigin = req.headers.origin;
+        const allowedOrigins = this._options.corsOrigin.split(",").map((origin) => origin.trim());
+        if (requestOrigin && (allowedOrigins.includes("*") || allowedOrigins.includes(requestOrigin))) {
+            res.setHeader("Access-Control-Allow-Origin", allowedOrigins.includes("*") ? "*" : requestOrigin);
+            res.setHeader("Vary", "Origin");
+            res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        }
+        if (req.method === "OPTIONS") {
+            res.status(204).end();
+            return;
+        }
+        next();
+    }
+
+    private async _GET_health (_req: Request, res: Response): Promise<void> {
+        const health = await this._useCases.health.checkHealth.execute();
+        res.json({ ok: true, data: formatResponseData(health) });
+    }
+
+    private async _GET_complaints (req: Request, res: Response): Promise<void> {
+        const phoneNumber = this._requiredQueryString(req, "phone");
+        const from = this._optionalDate(req, "from", false);
+        const to = this._optionalDate(req, "to", true);
+        if (from && to && from > to) {
+            throw new ClientError("Query param 'from' must be on or before 'to'.", 400, "INVALID_DATE_RANGE");
+        }
+        const history = await this._useCases.complaints.getComplaintHistory.execute({
+            phoneNumber,
+            from,
+            to,
+            limit: this._positiveInteger(req, "limit", 50, 100),
+            offset: this._positiveInteger(req, "offset", 0, Number.MAX_SAFE_INTEGER, true),
+        });
+        res.json({ ok: true, data: formatResponseData(history) });
+    }
+
+    private async _GET_reputation (req: Request, res: Response): Promise<void> {
+        const phoneNumber = this._requiredQueryString(req, "phone");
+        const from = this._optionalDate(req, "from", false);
+        const to = this._optionalDate(req, "to", true);
+        if (from && to && from > to) {
+            throw new ClientError("Query param 'from' must be on or before 'to'.", 400, "INVALID_DATE_RANGE");
+        }
+        const reputation = await this._useCases.complaints.getComplaintReputation.execute({ phoneNumber, from, to });
+        res.json({ ok: true, data: formatResponseData(reputation) });
+    }
+
+    private async _GET_spamNumbers (req: Request, res: Response): Promise<void> {
+        const from = this._requiredDate(req, "from");
+        const to = this._optionalDate(req, "to", true);
+        if (to && from > to) {
+            throw new ClientError("Query param 'from' must be on or before 'to'.", 400, "INVALID_DATE_RANGE");
+        }
+        const result = await this._useCases.complaints.listSpamNumbers.execute({
+            from,
+            to,
+            minComplaints: this._positiveInteger(req, "minComplaints", 1, 1000000, false, "INVALID_MIN_COMPLAINTS"),
+            limit: this._positiveInteger(req, "limit", 50, 100),
+            offset: this._positiveInteger(req, "offset", 0, Number.MAX_SAFE_INTEGER, true),
+        });
+        res.json({ ok: true, data: formatResponseData(result) });
+    }
+
+    private _requiredQueryString (req: Request, key: string): string {
+        const value = req.query[key];
+        if (typeof value !== "string" || !value.trim()) {
+            throw new ClientError(`Query param '${key}' is required.`, 400, "MISSING_QUERY_PARAM");
+        }
+        return value;
+    }
+
+    private _optionalDate (req: Request, key: string, isEndOfDay: boolean): Date | undefined {
+        const value = req.query[key];
+        if (value === undefined) return undefined;
+        if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            throw new ClientError(`Query param '${key}' must use YYYY-MM-DD.`, 400, "INVALID_DATE");
+        }
+        const date = new Date(`${value}T${isEndOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
+        if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+            throw new ClientError(`Query param '${key}' is not a valid calendar date.`, 400, "INVALID_DATE");
+        }
+        return date;
+    }
+
+    private _requiredDate (req: Request, key: string): Date {
+        if (req.query[key] === undefined) {
+            throw new ClientError(`Query param '${key}' is required.`, 400, "MISSING_QUERY_PARAM");
+        }
+        return this._optionalDate(req, key, false) as Date;
+    }
+
+    private _positiveInteger (
+        req: Request,
+        key: string,
+        fallback: number,
+        maximum: number,
+        allowZero = false,
+        invalidCode = "INVALID_PAGINATION",
+    ): number {
+        const value = req.query[key];
+        if (value === undefined) return fallback;
+        if (typeof value !== "string" || !/^\d+$/.test(value)) {
+            throw new ClientError(`Query param '${key}' must be an integer.`, 400, invalidCode);
+        }
+        const number = Number(value);
+        if (!Number.isSafeInteger(number) || number > maximum || (!allowZero && number < 1)) {
+            throw new ClientError(`Query param '${key}' is outside its allowed range.`, 400, invalidCode);
+        }
+        return number;
+    }
+}
