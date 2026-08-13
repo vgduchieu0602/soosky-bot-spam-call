@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ComplaintHistory, ComplaintReputation, DncComplaint, FindComplaintHistoryQuery, FindComplaintReputationQuery, FindSpamNumbersQuery, SpamNumberList, UpsertComplaintsResult } from "../src/domain/entities/DncComplaint";
+import { ComplaintHistory, ComplaintReputation, DncComplaint, FindComplaintHistoryQuery, FindComplaintReputationQuery, FindSpamNumbersQuery, SearchPhoneNumbersQuery, SpamNumberList, UpsertComplaintsResult } from "../src/domain/entities/DncComplaint";
 import ComplaintRepository from "../src/domain/repositories/ComplaintRepository";
 import GetComplaintReputationUseCase from "../src/domain/use-cases/complaints/GetComplaintReputationUseCase";
 
@@ -21,6 +21,10 @@ class FakeRepository implements ComplaintRepository {
     }
 
     public async findSpamNumbers (_query: FindSpamNumbersQuery): Promise<SpamNumberList> {
+        throw new Error("Not used by this test.");
+    }
+
+    public async searchPhoneNumbers (_query: SearchPhoneNumbersQuery): Promise<SpamNumberList> {
         throw new Error("Not used by this test.");
     }
 }

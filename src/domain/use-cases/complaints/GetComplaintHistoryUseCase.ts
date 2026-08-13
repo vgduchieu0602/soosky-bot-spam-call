@@ -6,8 +6,6 @@ export type GetComplaintHistoryQuery = {
     phoneNumber: string;
     from?: Date;
     to?: Date;
-    limit: number;
-    offset: number;
 };
 
 export default class GetComplaintHistoryUseCase {

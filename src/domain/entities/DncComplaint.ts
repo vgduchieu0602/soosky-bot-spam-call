@@ -19,6 +19,7 @@ export interface DncComplaint {
 export type ComplaintHistory = {
     phoneNumber: string;
     total: number;
+    lastComplaintAt: Date | null;
     items: DncComplaint[];
 };
 
@@ -48,11 +49,9 @@ export type FindComplaintHistoryQuery = {
     phoneNumber: string;
     from?: Date;
     to?: Date;
-    limit: number;
-    offset: number;
 };
 
-export type FindComplaintReputationQuery = Omit<FindComplaintHistoryQuery, "limit" | "offset">;
+export type FindComplaintReputationQuery = FindComplaintHistoryQuery;
 
 export type FindSpamNumbersQuery = {
     from?: Date;
@@ -60,4 +59,8 @@ export type FindSpamNumbersQuery = {
     minComplaints: number;
     limit: number;
     offset: number;
+};
+
+export type SearchPhoneNumbersQuery = {
+    phoneFragment: string;
 };

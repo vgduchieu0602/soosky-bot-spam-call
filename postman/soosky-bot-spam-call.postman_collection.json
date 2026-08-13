@@ -102,23 +102,22 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/complaints?phone={{phone}}&limit=50&offset=0",
+              "raw": "{{baseUrl}}/api/v1/complaints?phone={{phone}}",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "complaints"],
               "query": [
-                { "key": "phone", "value": "{{phone}}" },
-                { "key": "limit", "value": "50" },
-                { "key": "offset", "value": "0" }
+                { "key": "phone", "value": "{{phone}}" }
               ]
             },
-            "description": "Detailed complaints for one phone, newest first. total is the number of matching complaints; items is one page."
+            "description": "Detailed complaints for one phone, newest first. The API returns all matching complaints; lastComplaintAt is the latest complaint in the selected range."
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Returns a paginated complaint history', () => {",
+            "pm.test('Returns complete complaint history', () => {",
             "    pm.response.to.have.status(200);",
             "    const data = pm.response.json().data;",
             "    pm.expect(data).to.have.property('total');",
             "    pm.expect(data.items).to.be.an('array');",
+            "    pm.expect(data).to.have.property('lastComplaintAt');",
             "});"
           ] } }]
         }
@@ -188,6 +187,42 @@
               ]
             },
             "description": "Example of the next page. Increase offset by limit until offset + items.length >= total."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phone fragment search",
+      "item": [
+        {
+          "name": "Search numbers containing a digit fragment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/search?phone=01234",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "search"],
+              "query": [{ "key": "phone", "value": "01234" }]
+            },
+            "description": "Requires 3 to 15 digits. Returns every unique E.164 number that contains the requested digit fragment, with complaintCount and lastComplaintAt."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns matching phone number details', () => {",
+            "    pm.response.to.have.status(200);",
+            "    const data = pm.response.json().data;",
+            "    pm.expect(data).to.have.property('total');",
+            "    pm.expect(data.items).to.be.an('array');",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Search fragment too short - 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/search?phone=12",
+            "description": "Expected: 400 INVALID_PHONE_SEARCH."
           }
         }
       ]

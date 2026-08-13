@@ -21,7 +21,7 @@ test("lists every known spam number without requiring a date range", async () =>
             },
         },
         health: { check: {} },
-    } as ServerUseCases;
+    } as unknown as ServerUseCases;
     const server = new Server(useCases, new RateLimiter({ windowMs: 60000, max: 60, maxTrackedKeys: 10 }), {
         corsOrigin: "*",
         trustProxy: 0,
@@ -42,4 +42,53 @@ test("lists every known spam number without requiring a date range", async () =>
             items: [{ phoneNumber: "+12025550111", complaintCount: 3, lastComplaintAt: "2026-08-12T00:00:00.000Z" }],
         },
     });
+});
+
+test("gets complete phone history without pagination input", async () => {
+    let receivedQuery: unknown;
+    const useCases = {
+        complaints: {
+            getComplaintHistory: {
+                execute: async (query: unknown) => {
+                    receivedQuery = query;
+                    return { phoneNumber: "+12025550111", total: 1, lastComplaintAt: new Date("2026-08-12T00:00:00.000Z"), items: [] };
+                },
+            },
+            getComplaintReputation: {},
+            listSpamNumbers: {},
+        },
+        health: { check: {} },
+    } as unknown as ServerUseCases;
+    const server = new Server(useCases, new RateLimiter({ windowMs: 60000, max: 60, maxTrackedKeys: 10 }), { corsOrigin: "*", trustProxy: 0, rateLimitExemptPath: "/health" });
+    const response = { json: () => undefined } as unknown as Response;
+
+    await (server as unknown as { _GET_complaints: (req: Request, res: Response) => Promise<void> })
+        ._GET_complaints({ query: { phone: "2025550111" } } as unknown as Request, response);
+
+    assert.deepEqual(receivedQuery, { phoneNumber: "2025550111", from: undefined, to: undefined });
+});
+
+test("searches phone numbers by a digit fragment", async () => {
+    let receivedQuery: unknown;
+    const useCases = {
+        complaints: {
+            getComplaintHistory: {},
+            getComplaintReputation: {},
+            listSpamNumbers: {},
+            searchPhoneNumbers: {
+                execute: async (query: unknown) => {
+                    receivedQuery = query;
+                    return { total: 0, items: [] };
+                },
+            },
+        },
+        health: { check: {} },
+    } as unknown as ServerUseCases;
+    const server = new Server(useCases, new RateLimiter({ windowMs: 60000, max: 60, maxTrackedKeys: 10 }), { corsOrigin: "*", trustProxy: 0, rateLimitExemptPath: "/health" });
+    const response = { json: () => undefined } as unknown as Response;
+
+    await (server as unknown as { _GET_searchPhoneNumbers: (req: Request, res: Response) => Promise<void> })
+        ._GET_searchPhoneNumbers({ query: { phone: "01234" } } as unknown as Request, response);
+
+    assert.deepEqual(receivedQuery, { phoneFragment: "01234" });
 });

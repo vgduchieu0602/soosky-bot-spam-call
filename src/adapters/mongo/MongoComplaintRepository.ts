@@ -1,5 +1,5 @@
 import { AnyBulkWriteOperation } from "mongoose";
-import { ComplaintHistory, ComplaintReputation, DncComplaint, FindComplaintHistoryQuery, FindComplaintReputationQuery, FindSpamNumbersQuery, SpamNumber, SpamNumberList, UpsertComplaintsResult } from "../../domain/entities/DncComplaint";
+import { ComplaintHistory, ComplaintReputation, DncComplaint, FindComplaintHistoryQuery, FindComplaintReputationQuery, FindSpamNumbersQuery, SearchPhoneNumbersQuery, SpamNumber, SpamNumberList, UpsertComplaintsResult } from "../../domain/entities/DncComplaint";
 import ComplaintRepository from "../../domain/repositories/ComplaintRepository";
 import DncComplaintModel, { DncComplaintDoc } from "./models/DncComplaintModel";
 
@@ -33,13 +33,12 @@ export default class MongoComplaintRepository implements ComplaintRepository {
             DncComplaintModel.countDocuments(filter),
             DncComplaintModel.find(filter)
                 .sort({ createdAt: -1, ftcComplaintId: -1 })
-                .skip(query.offset)
-                .limit(query.limit)
                 .lean(),
         ]);
         return {
             phoneNumber: query.phoneNumber,
             total,
+            lastComplaintAt: docs[0]?.createdAt || null,
             items: docs.map((doc) => ({
                 ftcComplaintId: doc.ftcComplaintId,
                 phoneNumber: doc.phoneNumber,
@@ -110,6 +109,37 @@ export default class MongoComplaintRepository implements ComplaintRepository {
             total: result?.metadata[0]?.total || 0,
             items: result?.items || [],
         };
+    }
+
+    public async searchPhoneNumbers (query: SearchPhoneNumbersQuery): Promise<SpamNumberList> {
+        const [result] = await DncComplaintModel.aggregate<{
+            metadata: { total: number }[];
+            items: SpamNumber[];
+        }>([
+            { $match: { phoneNumber: { $regex: query.phoneFragment } } },
+            {
+                $group: {
+                    _id: "$phoneNumber",
+                    complaintCount: { $sum: 1 },
+                    lastComplaintAt: { $max: "$createdAt" },
+                },
+            },
+            { $sort: { complaintCount: -1, lastComplaintAt: -1, _id: 1 } },
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    items: [{
+                        $project: {
+                            _id: 0,
+                            phoneNumber: "$_id",
+                            complaintCount: 1,
+                            lastComplaintAt: 1,
+                        },
+                    }],
+                },
+            },
+        ]);
+        return { total: result?.metadata[0]?.total || 0, items: result?.items || [] };
     }
 
     private _filterFor (query: { from?: Date; to?: Date; phoneNumber?: string }): Record<string, unknown> {

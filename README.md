@@ -66,10 +66,10 @@ Khi không healthy: HTTP `503` với envelope lỗi chuẩn, `code` là `MONGO_D
 
 ### `GET /api/v1/complaints`
 
-Query bắt buộc: `phone`. Query tùy chọn: `from`, `to` (`YYYY-MM-DD`), `limit` (1–100, mặc định 50), `offset` (mặc định 0).
+Query bắt buộc: `phone`. Query tùy chọn: `from`, `to` (`YYYY-MM-DD`). API trả toàn bộ lịch sử phù hợp, không nhận `limit` hoặc `offset`.
 
 ```text
-GET /api/v1/complaints?phone=%2B12025550111&from=2026-08-01&to=2026-08-31&limit=50&offset=0
+GET /api/v1/complaints?phone=%2B12025550111&from=2026-08-01&to=2026-08-31
 ```
 
 ```json
@@ -78,6 +78,7 @@ GET /api/v1/complaints?phone=%2B12025550111&from=2026-08-01&to=2026-08-31&limit=
   "data": {
     "phoneNumber": "+12025550111",
     "total": 2,
+    "lastComplaintAt": "2026-08-10T16:23:11.000Z",
     "items": [
       {
         "ftcComplaintId": "...",

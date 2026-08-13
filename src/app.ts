@@ -7,6 +7,7 @@ import config from "./config";
 import GetComplaintHistoryUseCase from "./domain/use-cases/complaints/GetComplaintHistoryUseCase";
 import GetComplaintReputationUseCase from "./domain/use-cases/complaints/GetComplaintReputationUseCase";
 import ListSpamNumbersUseCase from "./domain/use-cases/complaints/ListSpamNumbersUseCase";
+import SearchPhoneNumbersUseCase from "./domain/use-cases/complaints/SearchPhoneNumbersUseCase";
 import SyncDncComplaintsUseCase from "./domain/use-cases/sync/SyncDncComplaintsUseCase";
 import HealthService from "./http/HealthService";
 import RateLimiter from "./http/RateLimiter";
@@ -26,6 +27,7 @@ const useCases = {
         getComplaintHistory: new GetComplaintHistoryUseCase(repository),
         getComplaintReputation: new GetComplaintReputationUseCase(repository),
         listSpamNumbers: new ListSpamNumbersUseCase(repository),
+        searchPhoneNumbers: new SearchPhoneNumbersUseCase(repository),
     },
     health: {
         check: new HealthService(syncRunRepository, config.health.maxSyncAgeHours),

@@ -5,6 +5,7 @@ import {
     FindComplaintHistoryQuery,
     FindComplaintReputationQuery,
     FindSpamNumbersQuery,
+    SearchPhoneNumbersQuery,
     SpamNumberList,
     UpsertComplaintsResult,
 } from "../entities/DncComplaint";
@@ -14,4 +15,5 @@ export default interface ComplaintRepository {
     findHistory (query: FindComplaintHistoryQuery): Promise<ComplaintHistory>;
     findReputation (query: FindComplaintReputationQuery): Promise<ComplaintReputation>;
     findSpamNumbers (query: FindSpamNumbersQuery): Promise<SpamNumberList>;
+    searchPhoneNumbers (query: SearchPhoneNumbersQuery): Promise<SpamNumberList>;
 }

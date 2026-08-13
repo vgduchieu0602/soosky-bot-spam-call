@@ -3,6 +3,7 @@ import type { Server as HttpServer } from "node:http";
 import GetComplaintHistoryUseCase from "../domain/use-cases/complaints/GetComplaintHistoryUseCase";
 import GetComplaintReputationUseCase from "../domain/use-cases/complaints/GetComplaintReputationUseCase";
 import ListSpamNumbersUseCase from "../domain/use-cases/complaints/ListSpamNumbersUseCase";
+import SearchPhoneNumbersUseCase from "../domain/use-cases/complaints/SearchPhoneNumbersUseCase";
 import HealthService from "./HealthService";
 import { InvalidE164PhoneError } from "../domain/value-objects/E164Phone";
 import ClientError from "./ClientError";
@@ -15,6 +16,7 @@ export type ServerUseCases = {
         getComplaintHistory: GetComplaintHistoryUseCase;
         getComplaintReputation: GetComplaintReputationUseCase;
         listSpamNumbers: ListSpamNumbersUseCase;
+        searchPhoneNumbers: SearchPhoneNumbersUseCase;
     };
     health: {
         check: HealthService;
@@ -39,6 +41,7 @@ class Server {
         ["GET", "/api/v1/complaints", this._GET_complaints.bind(this)],
         ["GET", "/api/v1/reputation", this._GET_reputation.bind(this)],
         ["GET", "/api/v1/spam-numbers", this._GET_spamNumbers.bind(this)],
+        ["GET", "/api/v1/search", this._GET_searchPhoneNumbers.bind(this)],
     ];
 
     constructor (
@@ -164,8 +167,6 @@ class Server {
             phoneNumber,
             from,
             to,
-            limit: this._positiveInteger(req, "limit", 50, 100),
-            offset: this._positiveInteger(req, "offset", 0, Number.MAX_SAFE_INTEGER, true),
         });
         res.json({ ok: true, data: formatResponseData(history) });
     }
@@ -197,12 +198,27 @@ class Server {
         res.json({ ok: true, data: formatResponseData(result) });
     }
 
+    private async _GET_searchPhoneNumbers (req: Request, res: Response): Promise<void> {
+        const phoneFragment = this._phoneFragment(req);
+        const result = await this._useCases.complaints.searchPhoneNumbers.execute({ phoneFragment });
+        res.json({ ok: true, data: formatResponseData(result) });
+    }
+
     private _requiredQueryString (req: Request, key: string): string {
         const value = req.query[key];
         if (typeof value !== "string" || !value.trim()) {
             throw new ClientError(`Query param '${key}' is required.`, 400, "MISSING_QUERY_PARAM");
         }
         return value;
+    }
+
+    private _phoneFragment (req: Request): string {
+        const rawValue = this._requiredQueryString(req, "phone");
+        const digits = rawValue.replace(/\D/g, "");
+        if (digits.length < 3 || digits.length > 15) {
+            throw new ClientError("Query param 'phone' must contain 3 to 15 digits.", 400, "INVALID_PHONE_SEARCH");
+        }
+        return digits;
     }
 
     private _optionalDate (req: Request, key: string, isEndOfDay: boolean): Date | undefined {
@@ -216,13 +232,6 @@ class Server {
             throw new ClientError(`Query param '${key}' is not a valid calendar date.`, 400, "INVALID_DATE");
         }
         return date;
-    }
-
-    private _requiredDate (req: Request, key: string): Date {
-        if (req.query[key] === undefined) {
-            throw new ClientError(`Query param '${key}' is required.`, 400, "MISSING_QUERY_PARAM");
-        }
-        return this._optionalDate(req, key, false) as Date;
     }
 
     private _positiveInteger (

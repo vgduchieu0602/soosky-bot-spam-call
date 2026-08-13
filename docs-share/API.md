@@ -47,7 +47,7 @@ fetch(`/api/v1/reputation?${query}`);
 
 ## 2. Phân trang
 
-`/api/v1/complaints` và `/api/v1/spam-numbers` dùng offset pagination.
+Chỉ `/api/v1/spam-numbers` dùng offset pagination. `/api/v1/complaints` và `/api/v1/search` do backend xử lý toàn bộ kết quả, client không truyền `limit` hoặc `offset`.
 
 | Query | Bắt buộc | Giá trị | Mặc định |
 |---|---:|---|---:|
@@ -162,11 +162,9 @@ Mục đích: lấy lịch sử complaint chi tiết của một số. Kết qu�
 | `phone` | Có | US/NANP phone | — |
 | `from` | Không | `YYYY-MM-DD` | — |
 | `to` | Không | `YYYY-MM-DD` | — |
-| `limit` | Không | `1..100` | `50` |
-| `offset` | Không | `>=0` | `0` |
 
 ```text
-GET /api/v1/complaints?phone=2025550111&limit=50&offset=0
+GET /api/v1/complaints?phone=2025550111
 ```
 
 **Response `200`**
@@ -177,6 +175,7 @@ GET /api/v1/complaints?phone=2025550111&limit=50&offset=0
   "data": {
     "phoneNumber": "+12025550111",
     "total": 2,
+    "lastComplaintAt": "2026-08-10T16:23:11.000Z",
     "items": [
       {
         "ftcComplaintId": "2dae54c3d3c06d1960689139d39c3138",
@@ -192,7 +191,7 @@ GET /api/v1/complaints?phone=2025550111&limit=50&offset=0
 }
 ```
 
-`consumerCity` và `consumerState` có thể là `null` khi FTC không cung cấp thông tin đó.
+`lastComplaintAt` là complaint mới nhất trong toàn bộ kết quả lọc. `consumerCity` và `consumerState` có thể là `null` khi FTC không cung cấp thông tin đó.
 
 ### 3.4 `GET /api/v1/spam-numbers`
 
@@ -244,6 +243,40 @@ GET /api/v1/spam-numbers?from=2026-01-01&minComplaints=3&limit=100&offset=0
 
 Kết quả sắp xếp theo `complaintCount` giảm dần, tiếp theo `lastComplaintAt` giảm dần, rồi `phoneNumber` tăng dần để pagination ổn định.
 
+### 3.5 `GET /api/v1/search`
+
+Mục đích: tìm một phần số điện thoại trong kho số spam. Endpoint phù hợp cho ô tìm kiếm FE hoặc backend cần tìm các số chứa một chuỗi chữ số. Không phân trang: backend trả toàn bộ số khớp.
+
+| Query | Bắt buộc | Format | Ý nghĩa |
+|---|---:|---|---|
+| `phone` | Có | Chuỗi chứa `3..15` chữ số | Phần số cần tìm; dấu cách, `+`, `-`, `(`, `)` được bỏ qua. |
+
+Ví dụ, tìm các số chứa `01234`:
+
+```text
+GET /api/v1/search?phone=01234
+```
+
+**Response `200`**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "total": 1,
+    "items": [
+      {
+        "phoneNumber": "+12025501234",
+        "complaintCount": 2,
+        "lastComplaintAt": "2026-08-12T00:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+`items` có cùng cấu trúc và thứ tự sắp xếp như `/api/v1/spam-numbers`: nhiều complaint của cùng một số được gộp thành một item.
+
 ## 4. Error contract
 
 | HTTP | Code | Khi nào xảy ra |
@@ -254,6 +287,7 @@ Kết quả sắp xếp theo `complaintCount` giảm dần, tiếp theo `lastCom
 | `400` | `INVALID_DATE_RANGE` | `from` sau `to`. |
 | `400` | `INVALID_PAGINATION` | `limit` hoặc `offset` không đúng giới hạn. |
 | `400` | `INVALID_MIN_COMPLAINTS` | `minComplaints` không thuộc `1..1000000`. |
+| `400` | `INVALID_PHONE_SEARCH` | `phone` của `/api/v1/search` không có từ 3 đến 15 chữ số. |
 | `404` | `NOT_FOUND` | Sai method hoặc route. |
 | `429` | `RATE_LIMITED` | Vượt rate limit. |
 | `500` | `INTERNAL_ERROR` | Lỗi không mong đợi của server. |
@@ -293,6 +327,11 @@ GET /api/v1/reputation?phone=abc
 3. Nếu cần chi tiết, gọi `/api/v1/complaints` cùng `phone`.
 4. Với `400`, hiển thị lỗi input; với `429`, yêu cầu người dùng thử lại; với `500`, hiển thị lỗi hệ thống.
 
+### FE: tìm theo một phần số
+
+1. Chỉ gọi `/api/v1/search?phone=<fragment>` sau khi người dùng nhập ít nhất 3 chữ số.
+2. Hiển thị `items`; nếu `total` là `0`, hiển thị không tìm thấy số phù hợp.
+
 ### Backend: đồng bộ danh sách số
 
 1. Gọi `/api/v1/spam-numbers?limit=100&offset=0`.
@@ -300,18 +339,24 @@ GET /api/v1/reputation?phone=abc
 3. Tăng `offset` thêm 100 và lặp cho đến khi hết trang.
 4. Dùng `minComplaints` hoặc `from` nếu hệ thống đích cần ngưỡng/range riêng.
 
+### QA: kiểm thử nhanh
+
+```powershell
+$BASE = "http://127.0.0.1:3000"
+curl.exe "$BASE/api/v1/reputation?phone=2025550111"
+curl.exe "$BASE/api/v1/complaints?phone=2025550111"
+curl.exe "$BASE/api/v1/search?phone=01234"
+curl.exe "$BASE/api/v1/spam-numbers?limit=10&offset=0"
+curl.exe "$BASE/api/v1/search?phone=12"
+```
+
 ## 7. Chất lượng và nguồn dữ liệu
 
-- Dữ liệu từ FTC Do Not Call / robocall complaints, được người dùng báo cáo và không phải từng report đều được FTC xác minh.
+- Dữ liệu từ FTC Do Not Call / robocall complaints, do người dùng báo cáo và không phải từng report đều được FTC xác minh.
 - Complaint có cùng `ftcComplaintId` được upsert, không tạo duplicate khi source sync lại.
 - Số điện thoại không hợp lệ hoặc complaint không có ngày hợp lệ sẽ không được lưu.
 - Xem [BACKFILL.md](BACKFILL.md) để nạp dữ liệu FTC lịch sử trước khi vận hành scheduler hằng ngày.
 
 ## 8. Postman
 
-Import hai file sau vào Postman:
-
-- [Collection](../postman/soosky-bot-spam-call.postman_collection.json)
-- [Local environment](../postman/soosky-bot-spam-call.local.postman_environment.json)
-
-Sau khi import, chọn environment `Soosky Bot Spam Call - Local` rồi gửi request. Để test production, duplicate environment và đổi `baseUrl` thành `https://project5.vuonghieu.site`; không thêm dấu `/` ở cuối URL.
+Import [Collection](../postman/soosky-bot-spam-call.postman_collection.json) và [Local environment](../postman/soosky-bot-spam-call.local.postman_environment.json) vào Postman. Để test production, duplicate environment và đổi `baseUrl` thành `https://project5.vuonghieu.site`.
