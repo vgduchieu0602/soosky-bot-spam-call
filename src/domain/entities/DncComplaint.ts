@@ -55,7 +55,7 @@ export type FindComplaintHistoryQuery = {
 export type FindComplaintReputationQuery = Omit<FindComplaintHistoryQuery, "limit" | "offset">;
 
 export type FindSpamNumbersQuery = {
-    from: Date;
+    from?: Date;
     to?: Date;
     minComplaints: number;
     limit: number;

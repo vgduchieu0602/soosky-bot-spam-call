@@ -146,18 +146,18 @@ GET /api/v1/reputation?phone=%2B12025550111&from=2026-05-01
 
 ## GET `/api/v1/spam-numbers`
 
-Trả danh sách số khác nhau đã có complaint trong một khoảng thời gian. Đây là endpoint để service tiêu thụ đồng bộ hoặc kiểm tra batch; bot chỉ công bố dữ liệu, không tự áp chính sách chặn số.
+Trả danh sách số khác nhau đã có complaint trong database. Không truyền thời gian sẽ trả toàn bộ số; `from` và `to` chỉ là bộ lọc tùy chọn. Đây là endpoint để service tiêu thụ đồng bộ hoặc kiểm tra batch; bot chỉ công bố dữ liệu, không tự áp chính sách chặn số.
 
 | Query | Required | Default | Description |
 |---|---:|---:|---|
-| `from` | Yes | | `YYYY-MM-DD`, đầu ngày UTC |
+| `from` | No | | `YYYY-MM-DD`, đầu ngày UTC |
 | `to` | No | | `YYYY-MM-DD`, cuối ngày UTC |
 | `minComplaints` | No | `1` | Số complaint tối thiểu, `1..1000000` |
 | `limit` | No | `50` | `1..100` |
 | `offset` | No | `0` | `>=0` |
 
 ```text
-GET /api/v1/spam-numbers?from=2026-08-01&minComplaints=1&limit=50&offset=0
+GET /api/v1/spam-numbers?minComplaints=1&limit=50&offset=0
 ```
 
 ```json
@@ -182,11 +182,3 @@ GET /api/v1/spam-numbers?from=2026-08-01&minComplaints=1&limit=50&offset=0
 - `created-date`: bắt buộc và phải parse được; lưu Mongo `Date` / API ISO-8601 UTC.
 - `consumer-city`, `consumer-state`: trim + gộp khoảng trắng; FTC cho phép để trống nên lưu `null` thay vì bịa dữ liệu.
 - Complaint ID trùng được upsert; các complaint ID khác nhau cùng một số vẫn được giữ để tổng hợp lịch sử chính xác.
-
-## Test checklist
-
-- Số 10 digit, `1` + 10 digit, và E.164 đều trả cùng `phoneNumber` chuẩn.
-- Phone rỗng, có chữ, quốc tế/non-NANP trả `400 INVALID_PHONE_NUMBER`.
-- Kiểm tra phân trang: `limit=1&offset=0`, sau đó `offset=1`; `total` không đổi.
-- Kiểm tra lọc ngày và `from > to`.
-- Sau hai lần sync cùng dữ liệu, Mongo không tăng số document cho cùng `ftcComplaintId`.

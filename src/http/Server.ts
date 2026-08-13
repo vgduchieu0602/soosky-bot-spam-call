@@ -3,7 +3,7 @@ import type { Server as HttpServer } from "node:http";
 import GetComplaintHistoryUseCase from "../domain/use-cases/complaints/GetComplaintHistoryUseCase";
 import GetComplaintReputationUseCase from "../domain/use-cases/complaints/GetComplaintReputationUseCase";
 import ListSpamNumbersUseCase from "../domain/use-cases/complaints/ListSpamNumbersUseCase";
-import HealthService from "../domain/use-cases/health/HealthService";
+import HealthService from "./HealthService";
 import { InvalidE164PhoneError } from "../domain/value-objects/E164Phone";
 import ClientError from "./ClientError";
 import formatResponseData from "./formatResponseData";
@@ -182,9 +182,9 @@ class Server {
     }
 
     private async _GET_spamNumbers (req: Request, res: Response): Promise<void> {
-        const from = this._requiredDate(req, "from");
+        const from = this._optionalDate(req, "from", false);
         const to = this._optionalDate(req, "to", true);
-        if (to && from > to) {
+        if (from && to && from > to) {
             throw new ClientError("Query param 'from' must be on or before 'to'.", 400, "INVALID_DATE_RANGE");
         }
         const result = await this._useCases.complaints.listSpamNumbers.execute({

@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import ServiceUnhealthyError from "../../../http/ServiceUnhealthyError";
-import SyncRunRepository from "../../repositories/SyncRunRepository";
+import SyncRunRepository from "../domain/repositories/SyncRunRepository";
+import ServiceUnhealthyError from "./ServiceUnhealthyError";
 
 export type DatastoreState = "disconnected" | "connected" | "connecting" | "disconnecting";
 

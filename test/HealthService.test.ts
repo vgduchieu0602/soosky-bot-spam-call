@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import { SyncRun } from "../src/domain/entities/SyncRun";
 import ServiceUnhealthyError from "../src/http/ServiceUnhealthyError";
 import SyncRunRepository, { CompleteSyncRunInput, StartSyncRunInput } from "../src/domain/repositories/SyncRunRepository";
-import HealthService from "../src/domain/use-cases/health/HealthService";
+import HealthService from "../src/http/HealthService";
 
 class FakeSyncRunRepository implements SyncRunRepository {
     constructor (private _lastSuccessfulRun: SyncRun | null) {}

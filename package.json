@@ -8,6 +8,7 @@
         "dev": "tsx watch src/app.ts",
         "typecheck": "tsc --noEmit",
         "test": "tsx --test \"test/**/*.test.ts\"",
+        "sync:backfill": "tsx src/cmd/backfillFtc.ts",
         "build": "tsc --noEmit && esbuild src/app.ts --bundle --platform=node --format=esm --outfile=dist/app.js --packages=external",
         "start": "node dist/app.js"
     },

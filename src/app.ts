@@ -8,7 +8,7 @@ import GetComplaintHistoryUseCase from "./domain/use-cases/complaints/GetComplai
 import GetComplaintReputationUseCase from "./domain/use-cases/complaints/GetComplaintReputationUseCase";
 import ListSpamNumbersUseCase from "./domain/use-cases/complaints/ListSpamNumbersUseCase";
 import SyncDncComplaintsUseCase from "./domain/use-cases/sync/SyncDncComplaintsUseCase";
-import HealthService from "./domain/use-cases/health/HealthService";
+import HealthService from "./http/HealthService";
 import RateLimiter from "./http/RateLimiter";
 import Server from "./http/Server";
 import DailyScheduler from "./scheduler/DailyScheduler";
