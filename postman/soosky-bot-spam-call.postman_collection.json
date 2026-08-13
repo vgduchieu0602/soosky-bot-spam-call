@@ -68,7 +68,7 @@
                 { "key": "phone", "value": "{{phone}}" }
               ]
             },
-            "description": "Returns the reputation summary (complaintCount, lastComplaintAt) and detailed complaints for one phone, newest first. The API returns all matching complaints."
+            "description": "Returns the reputation summary (complaintCount, lastComplaintAt) and detailed complaints for one phone, newest first. Each item has reportedAt: the FTC report time in UTC. The API returns all matching complaints."
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('Returns complete complaint history', () => {",
@@ -76,6 +76,7 @@
             "    const data = pm.response.json().data;",
             "    pm.expect(data).to.have.property('complaintCount');",
             "    pm.expect(data.items).to.be.an('array');",
+            "    if (data.items.length > 0) pm.expect(data.items[0]).to.have.property('reportedAt');",
             "    pm.expect(data).to.have.property('lastComplaintAt');",
             "});"
           ] } }]

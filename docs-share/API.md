@@ -137,6 +137,7 @@ GET /api/v1/complaints?phone=2025550111
         "ftcComplaintId": "2dae54c3d3c06d1960689139d39c3138",
         "phoneNumber": "+12025550111",
         "rawPhoneNumber": "202-555-0111",
+        "reportedAt": "2026-08-10T16:23:11.000Z",
         "createdAt": "2026-08-10T16:23:11.000Z",
         "consumerCity": "Washington",
         "consumerState": "District of Columbia",
@@ -147,7 +148,7 @@ GET /api/v1/complaints?phone=2025550111
 }
 ```
 
-`complaintCount` và `lastComplaintAt` là thông tin reputation của số trong toàn bộ kết quả lọc. `items` là lịch sử chi tiết, sắp xếp mới nhất trước. Nếu số chưa có complaint trong khoảng lọc, API trả `complaintCount: 0`, `lastComplaintAt: null` và `items: []`. `consumerCity` và `consumerState` có thể là `null` khi FTC không cung cấp thông tin đó.
+`complaintCount` và `lastComplaintAt` là thông tin reputation của số trong toàn bộ kết quả lọc. `items` là lịch sử chi tiết, sắp xếp mới nhất trước. Mỗi item có `reportedAt`: thời điểm người dùng report cuộc gọi cho FTC (UTC). `createdAt` hiện giữ cùng giá trị để tương thích client cũ; client mới nên dùng `reportedAt`. Nếu số chưa có complaint trong khoảng lọc, API trả `complaintCount: 0`, `lastComplaintAt: null` và `items: []`. `consumerCity` và `consumerState` có thể là `null` khi FTC không cung cấp thông tin đó.
 
 ### 3.3 `GET /api/v1/spam-numbers`
 

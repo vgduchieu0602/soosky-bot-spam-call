@@ -85,6 +85,7 @@ test("filters invalid data and de-duplicates a FTC complaint id before persisten
         updated: 0,
     });
     assert.equal(repository.saved[0]?.phoneNumber, "+12025550111");
+    assert.equal(repository.saved[0]?.reportedAt.toISOString(), "2026-08-10T16:23:11.000Z");
     assert.equal(repository.saved[0]?.consumerState, "District of Columbia");
 });
 

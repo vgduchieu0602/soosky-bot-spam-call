@@ -95,7 +95,21 @@ test("gets complete phone history without pagination input", async () => {
             getComplaintHistory: {
                 execute: async (query: unknown) => {
                     receivedQuery = query;
-                    return { phoneNumber: "+12025550111", complaintCount: 1, lastComplaintAt: new Date("2026-08-12T00:00:00.000Z"), items: [] };
+                    return {
+                        phoneNumber: "+12025550111",
+                        complaintCount: 1,
+                        lastComplaintAt: new Date("2026-08-12T00:00:00.000Z"),
+                        items: [{
+                            ftcComplaintId: "complaint-1",
+                            phoneNumber: "+12025550111",
+                            rawPhoneNumber: "202-555-0111",
+                            reportedAt: new Date("2026-08-12T00:00:00.000Z"),
+                            createdAt: new Date("2026-08-12T00:00:00.000Z"),
+                            sourceFetchedAt: new Date("2026-08-13T00:00:00.000Z"),
+                            consumerCity: null,
+                            consumerState: null,
+                        }],
+                    };
                 },
             },
             listSpamNumbers: {},
@@ -116,7 +130,16 @@ test("gets complete phone history without pagination input", async () => {
             phoneNumber: "+12025550111",
             complaintCount: 1,
             lastComplaintAt: "2026-08-12T00:00:00.000Z",
-            items: [],
+            items: [{
+                ftcComplaintId: "complaint-1",
+                phoneNumber: "+12025550111",
+                rawPhoneNumber: "202-555-0111",
+                createdAt: "2026-08-12T00:00:00.000Z",
+                reportedAt: "2026-08-12T00:00:00.000Z",
+                sourceFetchedAt: "2026-08-13T00:00:00.000Z",
+                consumerCity: null,
+                consumerState: null,
+            }],
         },
     });
 });

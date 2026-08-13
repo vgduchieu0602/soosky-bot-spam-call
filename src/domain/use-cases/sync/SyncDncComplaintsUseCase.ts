@@ -103,6 +103,7 @@ export default class SyncDncComplaintsUseCase {
             ftcComplaintId: candidate.ftcComplaintId,
             phoneNumber,
             rawPhoneNumber: candidate.rawPhoneNumber.trim(),
+            reportedAt: createdAt,
             createdAt,
             consumerCity: this._normalizeLocation(candidate.consumerCity),
             consumerState: this._normalizeLocation(candidate.consumerState),

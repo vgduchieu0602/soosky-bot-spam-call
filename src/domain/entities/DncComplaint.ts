@@ -10,6 +10,8 @@ export interface DncComplaint {
     ftcComplaintId: string;
     phoneNumber: string;
     rawPhoneNumber: string;
+    /** Time the consumer reported the call to FTC. Kept alongside createdAt for backward compatibility. */
+    reportedAt: Date;
     createdAt: Date;
     consumerCity: string | null;
     consumerState: string | null;

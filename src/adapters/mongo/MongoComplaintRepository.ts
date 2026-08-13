@@ -43,6 +43,7 @@ export default class MongoComplaintRepository implements ComplaintRepository {
                 ftcComplaintId: doc.ftcComplaintId,
                 phoneNumber: doc.phoneNumber,
                 rawPhoneNumber: doc.rawPhoneNumber,
+                reportedAt: doc.createdAt,
                 createdAt: doc.createdAt,
                 consumerCity: doc.consumerCity,
                 consumerState: doc.consumerState,
