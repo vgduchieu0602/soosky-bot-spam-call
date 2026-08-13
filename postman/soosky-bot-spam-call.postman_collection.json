@@ -8,7 +8,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://127.0.0.1:3000"
+      "value": "https://project5.vuonghieu.site"
     },
     {
       "key": "phone",
