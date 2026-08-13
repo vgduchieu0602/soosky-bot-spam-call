@@ -1,7 +1,22 @@
-import { DatastoreState, ServiceHealth } from "../../entities/ServiceHealth";
-import ServiceUnhealthyError from "../../errors/ServiceUnhealthyError";
-import DatastoreStatus from "../../repositories/IDatastoreStatus";
-import SyncRunRepository from "../../repositories/ISyncRunRepository";
+import mongoose from "mongoose";
+import ServiceUnhealthyError from "../../../http/ServiceUnhealthyError";
+import SyncRunRepository from "../../repositories/SyncRunRepository";
+
+export type DatastoreState = "disconnected" | "connected" | "connecting" | "disconnecting";
+
+export type ServiceHealth = {
+    status: "healthy";
+    mongo: DatastoreState;
+    lastSuccessfulSyncAt: Date;
+    syncAgeSeconds: number;
+};
+
+const MONGO_STATES: Record<number, DatastoreState> = {
+    0: "disconnected",
+    1: "connected",
+    2: "connecting",
+    3: "disconnecting",
+};
 
 const UNHEALTHY_MONGO_CODES: Record<Exclude<DatastoreState, "connected">, string> = {
     connecting: "MONGO_CONNECTING",
@@ -9,15 +24,13 @@ const UNHEALTHY_MONGO_CODES: Record<Exclude<DatastoreState, "connected">, string
     disconnecting: "MONGO_DISCONNECTING",
 };
 
-export default class CheckHealthUseCase {
-    constructor (
-        private _datastore: DatastoreStatus,
-        private _syncRuns: SyncRunRepository,
-        private _maxSyncAgeHours: number,
-    ) {}
+export { HealthService as default };
 
-    public async execute (): Promise<ServiceHealth> {
-        const mongo = this._datastore.state();
+class HealthService {
+    constructor (private _syncRuns: SyncRunRepository, private _maxSyncAgeHours: number) {}
+
+    public async check (): Promise<ServiceHealth> {
+        const mongo = MONGO_STATES[mongoose.connection.readyState] || "disconnected";
         if (mongo !== "connected") {
             throw new ServiceUnhealthyError(`MongoDB is ${mongo}.`, UNHEALTHY_MONGO_CODES[mongo]);
         }

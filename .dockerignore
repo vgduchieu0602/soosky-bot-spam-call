@@ -1,0 +1,22 @@
+node_modules
+dist
+coverage
+logs
+
+.git
+.gitignore
+.github
+
+# Bí mật: không bao giờ vào build context.
+.env
+.env.*
+!.env.example
+
+*.log
+*.md
+docs-share
+deploy
+docker-compose*.yml
+Dockerfile
+.dockerignore
+index.ts

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test
+        run: npm test 2>&1 | tee test-output.txt
+
+      # Glob của test script nếu không match sẽ chạy 0 test mà vẫn exit 0.
+      - name: Assert tests actually ran
+        run: |
+          if ! grep -qE '^# pass [1-9][0-9]*' test-output.txt; then
+            echo "::error::No tests were executed - check the test glob"
+            exit 1
+          fi
+          grep -E '^# (tests|pass|fail)' test-output.txt
+
+      - run: npm run build
+
+      - name: Verify bundle
+        run: test -s dist/app.js && ls -la dist/
+
+      - name: Docker build
+        run: docker build -t soosky-bot-spam-call:ci .

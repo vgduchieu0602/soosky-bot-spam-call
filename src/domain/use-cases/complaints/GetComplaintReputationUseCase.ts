@@ -1,5 +1,5 @@
-import { ComplaintReputation } from "../../entities/ComplaintReputation";
-import ComplaintRepository from "../../repositories/IComplaintRepository";
+import { ComplaintReputation } from "../../entities/DncComplaint";
+import ComplaintRepository from "../../repositories/ComplaintRepository";
 import E164Phone from "../../value-objects/E164Phone";
 
 export type GetComplaintReputationQuery = {

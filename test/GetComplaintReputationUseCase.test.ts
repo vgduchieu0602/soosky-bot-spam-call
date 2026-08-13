@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ComplaintHistory } from "../../entities/ComplaintHistory";
-import { ComplaintReputation } from "../../entities/ComplaintReputation";
-import { DncComplaint } from "../../entities/DncComplaint";
-import ComplaintRepository, { FindComplaintHistoryQuery, FindComplaintReputationQuery, UpsertComplaintsResult } from "../../repositories/IComplaintRepository";
-import GetComplaintReputationUseCase from "./GetComplaintReputationUseCase";
+import { ComplaintHistory, ComplaintReputation, DncComplaint, FindComplaintHistoryQuery, FindComplaintReputationQuery, FindSpamNumbersQuery, SpamNumberList, UpsertComplaintsResult } from "../src/domain/entities/DncComplaint";
+import ComplaintRepository from "../src/domain/repositories/ComplaintRepository";
+import GetComplaintReputationUseCase from "../src/domain/use-cases/complaints/GetComplaintReputationUseCase";
 
 class FakeRepository implements ComplaintRepository {
     public receivedQuery: FindComplaintReputationQuery | null = null;
@@ -20,6 +18,10 @@ class FakeRepository implements ComplaintRepository {
     public async findReputation (query: FindComplaintReputationQuery): Promise<ComplaintReputation> {
         this.receivedQuery = query;
         return { phoneNumber: query.phoneNumber, complaintCount: 2, lastComplaintAt: new Date("2026-08-10T00:00:00.000Z") };
+    }
+
+    public async findSpamNumbers (_query: FindSpamNumbersQuery): Promise<SpamNumberList> {
+        throw new Error("Not used by this test.");
     }
 }
 

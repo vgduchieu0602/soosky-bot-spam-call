@@ -1,13 +1,9 @@
 import { AnyBulkWriteOperation } from "mongoose";
-import { ComplaintHistory } from "../../../domain/entities/ComplaintHistory";
-import { ComplaintReputation } from "../../../domain/entities/ComplaintReputation";
-import { DncComplaint } from "../../../domain/entities/DncComplaint";
-import { SpamNumber, SpamNumberList } from "../../../domain/entities/SpamNumberList";
-import ComplaintRepository, { FindComplaintHistoryQuery, FindComplaintReputationQuery, UpsertComplaintsResult } from "../../../domain/repositories/IComplaintRepository";
-import SpamNumberRepository, { FindSpamNumbersQuery } from "../../../domain/repositories/ISpamNumberRepository";
-import DncComplaintModel, { DncComplaintDoc } from "../models/DncComplaintModel";
+import { ComplaintHistory, ComplaintReputation, DncComplaint, FindComplaintHistoryQuery, FindComplaintReputationQuery, FindSpamNumbersQuery, SpamNumber, SpamNumberList, UpsertComplaintsResult } from "../../domain/entities/DncComplaint";
+import ComplaintRepository from "../../domain/repositories/ComplaintRepository";
+import DncComplaintModel, { DncComplaintDoc } from "./models/DncComplaintModel";
 
-export default class MongoComplaintRepository implements ComplaintRepository, SpamNumberRepository {
+export default class MongoComplaintRepository implements ComplaintRepository {
     public async upsertMany (complaints: DncComplaint[]): Promise<UpsertComplaintsResult> {
         if (complaints.length === 0) return { inserted: 0, updated: 0 };
 

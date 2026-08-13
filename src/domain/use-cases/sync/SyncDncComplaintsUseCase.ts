@@ -1,7 +1,7 @@
-import { DncComplaint, DncComplaintCandidate } from "../../entities/DncComplaint";
-import ComplaintRepository, { UpsertComplaintsResult } from "../../repositories/IComplaintRepository";
-import ComplaintSource, { FetchDncComplaintsQuery } from "../../repositories/IComplaintSource";
-import SyncRunRepository from "../../repositories/ISyncRunRepository";
+import { DncComplaint, DncComplaintCandidate, UpsertComplaintsResult } from "../../entities/DncComplaint";
+import ComplaintRepository from "../../repositories/ComplaintRepository";
+import ComplaintSource, { FetchDncComplaintsQuery } from "../../repositories/ComplaintSource";
+import SyncRunRepository from "../../repositories/SyncRunRepository";
 import E164Phone, { InvalidE164PhoneError } from "../../value-objects/E164Phone";
 
 export type SyncDncComplaintsInput = FetchDncComplaintsQuery;

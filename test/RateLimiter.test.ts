@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import RateLimiter from "./RateLimiter";
+import RateLimiter from "../src/http/RateLimiter";
 
 const options = { windowMs: 60000, max: 3, maxTrackedKeys: 2 };
 

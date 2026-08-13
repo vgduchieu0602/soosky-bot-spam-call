@@ -5,7 +5,7 @@ Response envelope: success `{ "ok": true, "data": ... }`; error `{ "ok": false, 
 
 ## Rate limit
 
-Giới hạn theo IP, fixed window, mặc định **60 request / 60 giây** (`HTTP_RATE_LIMIT_MAX`, `HTTP_RATE_LIMIT_WINDOW_MS`). `GET /health` được miễn.
+Giới hạn theo IP, fixed window, cố định **60 request / 60 giây**. `GET /health` được miễn.
 
 | Header | Ý nghĩa |
 |---|---|
@@ -26,7 +26,7 @@ Bộ đếm in-memory theo từng process, nên khi scale nhiều instance thì 
 
 - Source: FTC DNC Reported Calls API (`GET /v0/dnc-complaints`), authenticated by `FTC_API_KEY` header. Không crawl HTML/web page.
 - Schedule: mỗi ngày lúc `13:00` theo `America/New_York` (cấu hình được); chạy ngay khi service khởi động nếu `SYNC_RUN_ON_BOOT=true`.
-- Mỗi lần lấy lại 3 ngày gần nhất (`SYNC_LOOKBACK_DAYS=3`) để không thiếu dữ liệu weekend/holiday.
+- Mỗi lần lấy lại cố định 3 ngày gần nhất để không thiếu dữ liệu weekend/holiday.
 - Mongo collection: `ftc_dnc_complaints`; `ftcComplaintId` unique nên chạy lại không sinh duplicate.
 - Mongo collection: `ftc_sync_runs`; mỗi lần scheduler chạy ghi một document `running`, sau đó cập nhật `success` hoặc `failed` kèm `startedAt`, `completedAt`, `errorMessage`, `createdDateFrom`, `createdDateTo`, `fetched`, `accepted`, `inserted`, `updated`.
 

@@ -1,29 +1,25 @@
 import mongoose from "mongoose";
 import FtcComplaintSource from "./adapters/ftc/FtcComplaintSource";
-import connectMongo from "./adapters/mongo/connectMongo";
-import MongooseDatastoreStatus from "./adapters/mongo/MongooseDatastoreStatus";
-import MongoComplaintRepository from "./adapters/mongo/repositories/MongoComplaintRepository";
-import MongoSyncRunRepository from "./adapters/mongo/repositories/MongoSyncRunRepository";
+import { connectDatabase } from "./adapters/mongo/connectDatabase";
+import MongoComplaintRepository from "./adapters/mongo/MongoComplaintRepository";
+import MongoSyncRunRepository from "./adapters/mongo/MongoSyncRunRepository";
 import config from "./config";
 import GetComplaintHistoryUseCase from "./domain/use-cases/complaints/GetComplaintHistoryUseCase";
 import GetComplaintReputationUseCase from "./domain/use-cases/complaints/GetComplaintReputationUseCase";
 import ListSpamNumbersUseCase from "./domain/use-cases/complaints/ListSpamNumbersUseCase";
-import CheckHealthUseCase from "./domain/use-cases/health/CheckHealthUseCase";
 import SyncDncComplaintsUseCase from "./domain/use-cases/sync/SyncDncComplaintsUseCase";
+import HealthService from "./domain/use-cases/health/HealthService";
 import RateLimiter from "./http/RateLimiter";
 import Server from "./http/Server";
 import DailyScheduler from "./scheduler/DailyScheduler";
 
-const source = new FtcComplaintSource(
-    config.ftc.apiUrl,
-    config.ftc.apiKey,
-    config.ftc.fetchTimeoutMs,
-    config.ftc.retries,
-    config.ftc.requestDelayMs,
-);
+const SYNC_LOOKBACK_DAYS = 3;
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+const RATE_LIMIT_OPTIONS = { windowMs: 60_000, max: 60, maxTrackedKeys: 50_000 };
+
+const source = new FtcComplaintSource(config.ftcApiKey);
 const repository = new MongoComplaintRepository();
 const syncRunRepository = new MongoSyncRunRepository();
-const datastoreStatus = new MongooseDatastoreStatus();
 const syncDncComplaints = new SyncDncComplaintsUseCase(source, repository, syncRunRepository);
 const useCases = {
     complaints: {
@@ -32,7 +28,7 @@ const useCases = {
         listSpamNumbers: new ListSpamNumbersUseCase(repository),
     },
     health: {
-        checkHealth: new CheckHealthUseCase(datastoreStatus, syncRunRepository, config.health.maxSyncAgeHours),
+        check: new HealthService(syncRunRepository, config.health.maxSyncAgeHours),
     },
 };
 const scheduler = new DailyScheduler(
@@ -41,7 +37,7 @@ const scheduler = new DailyScheduler(
     config.sync.minute,
     async () => {
         const createdDateTo = dateInTimeZone(config.sync.timeZone);
-        const createdDateFrom = subtractCalendarDays(createdDateTo, config.sync.lookbackDays - 1);
+        const createdDateFrom = subtractCalendarDays(createdDateTo, SYNC_LOOKBACK_DAYS - 1);
         const startedAt = Date.now();
         const result = await syncDncComplaints.execute({ createdDateFrom, createdDateTo });
         console.log(`[sync] ${createdDateFrom}..${createdDateTo} in ${Date.now() - startedAt}ms; ${JSON.stringify(result)}`);
@@ -65,14 +61,15 @@ function subtractCalendarDays (dateString: string, days: number): string {
     return date.toISOString().slice(0, 10);
 }
 
-const rateLimiter = new RateLimiter(config.http.rateLimit);
+const rateLimiter = new RateLimiter(RATE_LIMIT_OPTIONS);
 const server = new Server(useCases, rateLimiter, {
     corsOrigin: config.http.corsOrigin,
+    trustProxy: config.http.trustProxy,
     rateLimitExemptPath: "/health",
 });
 
 (async () => {
-    await connectMongo();
+    await connectDatabase();
     await server.listen(config.http.port, config.http.host);
     scheduler.start(config.sync.runOnBoot);
     console.log(`[app] listening on http://${config.http.host}:${config.http.port}.`);
@@ -91,9 +88,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
         setTimeout(() => {
             console.error("[app] graceful shutdown timed out; exiting.");
             process.exit(1);
-        }, config.http.shutdownTimeoutMs + 5000).unref();
+        }, SHUTDOWN_TIMEOUT_MS + 5000).unref();
         await Promise.all([
-            server.close(config.http.shutdownTimeoutMs),
+            server.close(SHUTDOWN_TIMEOUT_MS),
             scheduler.stop(),
         ]).catch((error) => console.error(`[app] shutdown error: ${error instanceof Error ? error.message : String(error)}`));
         await mongoose.disconnect().catch(() => undefined);

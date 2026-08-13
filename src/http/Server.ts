@@ -1,14 +1,14 @@
 import express, { NextFunction, Request, RequestHandler, Response } from "express";
 import type { Server as HttpServer } from "node:http";
-import ServiceUnhealthyError from "../domain/errors/ServiceUnhealthyError";
 import GetComplaintHistoryUseCase from "../domain/use-cases/complaints/GetComplaintHistoryUseCase";
 import GetComplaintReputationUseCase from "../domain/use-cases/complaints/GetComplaintReputationUseCase";
 import ListSpamNumbersUseCase from "../domain/use-cases/complaints/ListSpamNumbersUseCase";
-import CheckHealthUseCase from "../domain/use-cases/health/CheckHealthUseCase";
+import HealthService from "../domain/use-cases/health/HealthService";
 import { InvalidE164PhoneError } from "../domain/value-objects/E164Phone";
 import ClientError from "./ClientError";
 import formatResponseData from "./formatResponseData";
 import RateLimiter from "./RateLimiter";
+import ServiceUnhealthyError from "./ServiceUnhealthyError";
 
 export type ServerUseCases = {
     complaints: {
@@ -17,12 +17,14 @@ export type ServerUseCases = {
         listSpamNumbers: ListSpamNumbersUseCase;
     };
     health: {
-        checkHealth: CheckHealthUseCase;
+        check: HealthService;
     };
 };
 
 type ServerOptions = {
     corsOrigin: string;
+    /** Trusted proxy hops used to resolve the client IP the rate limiter keys on. */
+    trustProxy: number;
     /** Uptime probes hit this path far more often than clients hit the API, so it is not rate limited. */
     rateLimitExemptPath: string;
 };
@@ -72,7 +74,7 @@ class Server {
     }
 
     private _registerRouter (): void {
-        this._server.set("trust proxy", 1);
+        this._server.set("trust proxy", this._options.trustProxy);
         this._server.use(express.json({ limit: "64kb" }));
         this._server.use(this._cors.bind(this));
         this._server.use(this._rateLimit.bind(this));
@@ -147,7 +149,7 @@ class Server {
     }
 
     private async _GET_health (_req: Request, res: Response): Promise<void> {
-        const health = await this._useCases.health.checkHealth.execute();
+        const health = await this._useCases.health.check.check();
         res.json({ ok: true, data: formatResponseData(health) });
     }
 

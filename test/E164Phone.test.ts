@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import E164Phone, { InvalidE164PhoneError } from "./E164Phone";
+import E164Phone, { InvalidE164PhoneError } from "../src/domain/value-objects/E164Phone";
 
 test("normalizes supported US phone formats to E.164", () => {
     assert.equal(E164Phone.fromUs("202-555-0111").value, "+12025550111");

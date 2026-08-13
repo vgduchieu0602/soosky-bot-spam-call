@@ -37,10 +37,10 @@ Mặc định service đồng bộ lúc `13:00` theo `America/New_York`, có ch�
 
 ## Rate limit và shutdown
 
-- Mỗi IP được `HTTP_RATE_LIMIT_MAX` request trong mỗi `HTTP_RATE_LIMIT_WINDOW_MS` (mặc định 60 request / 60 giây). Vượt ngưỡng trả `429 RATE_LIMITED` kèm `Retry-After`. Mọi response đều có `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`.
+- Mỗi IP được tối đa 60 request trong cửa sổ 60 giây. Vượt ngưỡng trả `429 RATE_LIMITED` kèm `Retry-After`. Mọi response đều có `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`.
 - `GET /health` được miễn rate limit để uptime probe không tự làm mình bị chặn.
 - Bộ đếm nằm trong RAM của từng process. Chạy nhiều instance thì ngưỡng thực tế là `max × số instance`; cần ngưỡng dùng chung thì phải chuyển sang store ngoài (Redis).
-- `SIGTERM`/`SIGINT`: dừng scheduler và chờ lần sync đang chạy xong, đóng HTTP server nhưng vẫn để request đang xử lý hoàn tất (tối đa `HTTP_SHUTDOWN_TIMEOUT_MS`), rồi mới `mongoose.disconnect()`. Quá `HTTP_SHUTDOWN_TIMEOUT_MS + 5000` thì process tự exit `1`.
+- `SIGTERM`/`SIGINT`: dừng scheduler và chờ lần sync đang chạy xong, đóng HTTP server nhưng vẫn để request đang xử lý hoàn tất (tối đa 10 giây), rồi mới `mongoose.disconnect()`. Quá 15 giây thì process tự exit `1`.
 
 ## API cho FE
 
@@ -100,7 +100,7 @@ Xem đầy đủ trong [.env.example](.env.example). Bắt buộc:
 - `MONGO_URI`
 - `FTC_API_KEY`
 
-Các biến quan trọng: `SYNC_TIME_ZONE`, `SYNC_HOUR`, `SYNC_MINUTE`, `SYNC_LOOKBACK_DAYS`, `HEALTH_MAX_SYNC_AGE_HOURS`, `HTTP_PORT`, `HTTP_CORS_ORIGIN`, `HTTP_RATE_LIMIT_MAX`, `HTTP_RATE_LIMIT_WINDOW_MS`, `HTTP_SHUTDOWN_TIMEOUT_MS`.
+Các biến cấu hình: `SYNC_TIME_ZONE`, `SYNC_HOUR`, `SYNC_MINUTE`, `SYNC_RUN_ON_BOOT`, `HEALTH_MAX_SYNC_AGE_HOURS`, `HTTP_PORT`, `HTTP_HOST`, `HTTP_CORS_ORIGIN`, `HTTP_TRUST_PROXY`. Riêng `HOST_PORT`, `MEM_LIMIT`, `NODE_MAX_OLD_SPACE_MB` chỉ Docker Compose dùng. Các hằng số kỹ thuật được cố định trong mã: lấy lại 3 ngày, timeout FTC 30 giây/retry 3 lần, rate limit 60 request/phút và graceful shutdown 10 giây.
 
 ## Kiểm tra
 
@@ -109,5 +109,17 @@ npm run typecheck
 npm test
 npm run build
 ```
+
+## Deploy
+
+Docker + nginx, giống soosky-storm-api / soosky-weather-marine-api. Cổng trong container `3000`, publish ra VPS `3003` (3000/3001/3002 đã bị plant-care/storm/weather-marine chiếm).
+
+```bash
+cp .env.example .env   # điền MONGO_URI, FTC_API_KEY
+docker compose up -d --build
+curl -s http://127.0.0.1:3003/health
+```
+
+Chi tiết VPS, nginx, HTTPS, GitHub Actions auto-deploy, update/rollback: [DEPLOY.md](DEPLOY.md).
 
 Nguồn và quy tắc API FTC: [FTC DNC data set](https://www.ftc.gov/policy-notices/open-government/data-sets/do-not-call-data) và [FTC DNC API documentation](https://www.ftc.gov/developer/api/v0/endpoints/do-not-call-dnc-reported-calls-data-api).

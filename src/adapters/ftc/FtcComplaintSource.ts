@@ -1,6 +1,10 @@
 import { DncComplaintCandidate } from "../../domain/entities/DncComplaint";
-import ComplaintSource, { FetchDncComplaintsQuery } from "../../domain/repositories/IComplaintSource";
-import { sleep } from "../../shared/sleep";
+import ComplaintSource, { FetchDncComplaintsQuery } from "../../domain/repositories/ComplaintSource";
+
+const FTC_API_URL = "https://api.ftc.gov/v0/dnc-complaints";
+const FTC_FETCH_TIMEOUT_MS = 30_000;
+const FTC_FETCH_RETRIES = 3;
+const FTC_REQUEST_DELAY_MS = 150;
 
 type FtcComplaintResource = {
     id?: unknown;
@@ -19,11 +23,7 @@ type FtcResponse = {
 
 export default class FtcComplaintSource implements ComplaintSource {
     constructor (
-        private _apiUrl: string,
         private _apiKey: string,
-        private _timeoutMs: number,
-        private _retries: number,
-        private _requestDelayMs: number,
     ) {}
 
     public async fetchByCreatedDate (query: FetchDncComplaintsQuery): Promise<DncComplaintCandidate[]> {
@@ -46,7 +46,7 @@ export default class FtcComplaintSource implements ComplaintSource {
             }
             offset += resources.length;
             if (resources.length < pageSize) break;
-            await sleep(this._requestDelayMs);
+            await sleep(FTC_REQUEST_DELAY_MS);
         }
         return complaints;
     }
@@ -56,16 +56,16 @@ export default class FtcComplaintSource implements ComplaintSource {
         offset: number,
         pageSize: number,
     ): Promise<FtcResponse> {
-        const url = new URL(this._apiUrl);
+        const url = new URL(FTC_API_URL);
         url.searchParams.set("created_date_from", `\"${query.createdDateFrom}\"`);
         url.searchParams.set("created_date_to", `\"${query.createdDateTo}\"`);
         url.searchParams.set("items_per_page", String(pageSize));
         url.searchParams.set("offset", String(offset));
 
         let lastError: unknown;
-        for (let attempt = 1; attempt <= this._retries; attempt++) {
+        for (let attempt = 1; attempt <= FTC_FETCH_RETRIES; attempt++) {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), this._timeoutMs);
+            const timeout = setTimeout(() => controller.abort(), FTC_FETCH_TIMEOUT_MS);
             try {
                 const response = await fetch(url, {
                     headers: { "X-Api-Key": this._apiKey, Accept: "application/json" },
@@ -77,12 +77,12 @@ export default class FtcComplaintSource implements ComplaintSource {
                 return await response.json() as FtcResponse;
             } catch (err) {
                 lastError = err;
-                if (attempt < this._retries) await sleep(Math.min(1000 * 2 ** (attempt - 1), 10000));
+                if (attempt < FTC_FETCH_RETRIES) await sleep(Math.min(1000 * 2 ** (attempt - 1), 10000));
             } finally {
                 clearTimeout(timeout);
             }
         }
-        throw new Error(`FTC API fetch failed after ${this._retries} attempts: ${this._errorMessage(lastError)}`);
+        throw new Error(`FTC API fetch failed after ${FTC_FETCH_RETRIES} attempts: ${this._errorMessage(lastError)}`);
     }
 
     private _toCandidate (resource: FtcComplaintResource): DncComplaintCandidate | null {
@@ -109,4 +109,8 @@ export default class FtcComplaintSource implements ComplaintSource {
     private _errorMessage (error: unknown): string {
         return error instanceof Error ? error.message : String(error);
     }
+}
+
+function sleep (milliseconds: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

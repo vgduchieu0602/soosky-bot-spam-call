@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ComplaintHistory } from "../../entities/ComplaintHistory";
-import { ComplaintReputation } from "../../entities/ComplaintReputation";
-import { DncComplaint, DncComplaintCandidate } from "../../entities/DncComplaint";
-import { SyncRun } from "../../entities/SyncRun";
-import ComplaintRepository, { FindComplaintHistoryQuery, FindComplaintReputationQuery, UpsertComplaintsResult } from "../../repositories/IComplaintRepository";
-import ComplaintSource, { FetchDncComplaintsQuery } from "../../repositories/IComplaintSource";
-import SyncRunRepository, { CompleteSyncRunInput, StartSyncRunInput } from "../../repositories/ISyncRunRepository";
-import SyncDncComplaintsUseCase from "./SyncDncComplaintsUseCase";
+import { ComplaintHistory, ComplaintReputation, DncComplaint, DncComplaintCandidate, FindComplaintHistoryQuery, FindComplaintReputationQuery, FindSpamNumbersQuery, SpamNumberList, UpsertComplaintsResult } from "../src/domain/entities/DncComplaint";
+import { SyncRun } from "../src/domain/entities/SyncRun";
+import ComplaintRepository from "../src/domain/repositories/ComplaintRepository";
+import ComplaintSource, { FetchDncComplaintsQuery } from "../src/domain/repositories/ComplaintSource";
+import SyncRunRepository, { CompleteSyncRunInput, StartSyncRunInput } from "../src/domain/repositories/SyncRunRepository";
+import SyncDncComplaintsUseCase from "../src/domain/use-cases/sync/SyncDncComplaintsUseCase";
 
 class FakeSource implements ComplaintSource {
     constructor (private _items: DncComplaintCandidate[]) {}
@@ -36,6 +34,10 @@ class FakeRepository implements ComplaintRepository {
     }
 
     public async findReputation (_query: FindComplaintReputationQuery): Promise<ComplaintReputation> {
+        throw new Error("Not used by this test.");
+    }
+
+    public async findSpamNumbers (_query: FindSpamNumbersQuery): Promise<SpamNumberList> {
         throw new Error("Not used by this test.");
     }
 }

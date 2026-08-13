@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
-import { SyncRun } from "../../../domain/entities/SyncRun";
-import SyncRunRepository, { CompleteSyncRunInput, StartSyncRunInput } from "../../../domain/repositories/ISyncRunRepository";
-import SyncRunModel, { SyncRunDoc } from "../models/SyncRunModel";
+import { SyncRun } from "../../domain/entities/SyncRun";
+import SyncRunRepository, { CompleteSyncRunInput, StartSyncRunInput } from "../../domain/repositories/SyncRunRepository";
+import SyncRunModel, { SyncRunDoc } from "./models/SyncRunModel";
 
 export default class MongoSyncRunRepository implements SyncRunRepository {
     public async startRun (input: StartSyncRunInput): Promise<string> {

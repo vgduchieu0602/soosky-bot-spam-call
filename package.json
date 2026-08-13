@@ -7,7 +7,7 @@
     "scripts": {
         "dev": "tsx watch src/app.ts",
         "typecheck": "tsc --noEmit",
-        "test": "tsx --test \"src/**/*.test.ts\"",
+        "test": "tsx --test \"test/**/*.test.ts\"",
         "build": "tsc --noEmit && esbuild src/app.ts --bundle --platform=node --format=esm --outfile=dist/app.js --packages=external",
         "start": "node dist/app.js"
     },
