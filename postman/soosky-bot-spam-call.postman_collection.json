@@ -1,0 +1,219 @@
+{
+  "info": {
+    "_postman_id": "5c6d4ffd-7d49-475b-8b4c-84484ca893ab",
+    "name": "Soosky Bot Spam Call API",
+    "description": "FTC spam-call data API. Select the Local or Production environment before sending requests. See docs-share/API.md for the full contract.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3000"
+    },
+    {
+      "key": "phone",
+      "value": "2025550111"
+    },
+    {
+      "key": "from",
+      "value": "2026-01-01"
+    },
+    {
+      "key": "to",
+      "value": "2026-12-31"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Service health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "Returns 200 when Mongo is connected and the latest successful FTC sync is fresh. 503 is a valid operational response while the first sync is pending or data is stale."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns JSON response envelope', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('ok');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Phone lookup",
+      "item": [
+        {
+          "name": "Reputation by phone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reputation?phone={{phone}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "reputation"],
+              "query": [{ "key": "phone", "value": "{{phone}}" }]
+            },
+            "description": "Requires only a US/NANP phone number. Returns complaintCount and lastComplaintAt. A number with no complaint returns 200 with complaintCount 0."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns reputation data', () => {",
+            "    pm.response.to.have.status(200);",
+            "    const data = pm.response.json().data;",
+            "    pm.expect(data).to.have.property('phoneNumber');",
+            "    pm.expect(data).to.have.property('complaintCount');",
+            "    pm.expect(data).to.have.property('lastComplaintAt');",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Reputation by phone and date range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reputation?phone={{phone}}&from={{from}}&to={{to}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "reputation"],
+              "query": [
+                { "key": "phone", "value": "{{phone}}" },
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to", "value": "{{to}}" }
+              ]
+            },
+            "description": "Optional date range. from/to must be YYYY-MM-DD and from must not be after to."
+          }
+        },
+        {
+          "name": "Complaint history by phone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/complaints?phone={{phone}}&limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "complaints"],
+              "query": [
+                { "key": "phone", "value": "{{phone}}" },
+                { "key": "limit", "value": "50" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Detailed complaints for one phone, newest first. total is the number of matching complaints; items is one page."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns a paginated complaint history', () => {",
+            "    pm.response.to.have.status(200);",
+            "    const data = pm.response.json().data;",
+            "    pm.expect(data).to.have.property('total');",
+            "    pm.expect(data.items).to.be.an('array');",
+            "});"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "Spam number list",
+      "item": [
+        {
+          "name": "List all known spam numbers - first page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/spam-numbers?limit=100&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "spam-numbers"],
+              "query": [
+                { "key": "limit", "value": "100" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "All database data, paginated. total is the number of unique E.164 phone numbers, not the number of complaint documents."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns a paginated number list', () => {",
+            "    pm.response.to.have.status(200);",
+            "    const data = pm.response.json().data;",
+            "    pm.expect(data).to.have.property('total');",
+            "    pm.expect(data.items).to.be.an('array');",
+            "    pm.expect(data.items.length).to.be.at.most(100);",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "List by date range and minimum complaints",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/spam-numbers?from={{from}}&to={{to}}&minComplaints=3&limit=100&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "spam-numbers"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to", "value": "{{to}}" },
+                { "key": "minComplaints", "value": "3" },
+                { "key": "limit", "value": "100" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "from/to and minComplaints are optional filters. Results are ordered by complaintCount descending, then lastComplaintAt descending."
+          }
+        },
+        {
+          "name": "List spam numbers - second page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/spam-numbers?limit=100&offset=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "spam-numbers"],
+              "query": [
+                { "key": "limit", "value": "100" },
+                { "key": "offset", "value": "100" }
+              ]
+            },
+            "description": "Example of the next page. Increase offset by limit until offset + items.length >= total."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation errors",
+      "item": [
+        {
+          "name": "Invalid phone - 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reputation?phone=abc",
+            "description": "Expected: 400 INVALID_PHONE_NUMBER."
+          }
+        },
+        {
+          "name": "Invalid date range - 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/spam-numbers?from=2026-08-31&to=2026-08-01",
+            "description": "Expected: 400 INVALID_DATE_RANGE."
+          }
+        }
+      ]
+    }
+  ]
+}

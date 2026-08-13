@@ -7,7 +7,7 @@ Tài liệu này là API contract cho FE, QA và backend tích hợp. Service c�
 | Item | Giá trị |
 |---|---|
 | Base URL local | `http://127.0.0.1:3000` |
-| Base URL production | URL do đội vận hành cung cấp |
+| Base URL production | `https://project5.vuonghieu.site` |
 | Phiên bản API | `v1` |
 | Content type | `application/json` |
 | Authentication | Chưa có API key/JWT. Chỉ mở service cho các hệ thống được phép truy cập. |
@@ -40,8 +40,6 @@ Các endpoint nhận `phone` chỉ hỗ trợ số US/NANP. Các format hợp l�
 
 Kết quả luôn dùng E.164: `+12025550111`.
 
-Khi truyền dấu `+` trong URL, FE phải encode thành `%2B` hoặc dùng `URLSearchParams`:
-
 ```ts
 const query = new URLSearchParams({ phone: "+12025550111" });
 fetch(`/api/v1/reputation?${query}`);
@@ -72,10 +70,6 @@ GET /api/v1/spam-numbers?limit=100&offset=200
 ## 3. Endpoints
 
 ### 3.1 `GET /health`
-
-Mục đích: health check cho monitoring, load balancer hoặc Docker. FE không cần dùng endpoint này để hiển thị dữ liệu spam.
-
-Không có input. Endpoint này không bị rate limit.
 
 Điều kiện trả `200`: Mongo đang kết nối và lần FTC sync thành công gần nhất chưa quá `HEALTH_MAX_SYNC_AGE_HOURS`.
 
@@ -202,7 +196,7 @@ GET /api/v1/complaints?phone=2025550111&limit=50&offset=0
 
 ### 3.4 `GET /api/v1/spam-numbers`
 
-Mục đích: lấy danh sách số điện thoại có complaint trong database. Đây là endpoint phù hợp để backend khác đồng bộ danh sách số spam.
+Mục đích: lấy danh sách số điện thoại có complaint trong database. 
 
 Mặc định không truyền ngày sẽ trả tất cả số có ít nhất một complaint. Các số được gộp theo số điện thoại E.164:
 
@@ -306,21 +300,18 @@ GET /api/v1/reputation?phone=abc
 3. Tăng `offset` thêm 100 và lặp cho đến khi hết trang.
 4. Dùng `minComplaints` hoặc `from` nếu hệ thống đích cần ngưỡng/range riêng.
 
-### QA: kiểm thử nhanh
-
-```powershell
-$BASE = "http://127.0.0.1:3000"
-curl.exe "$BASE/health"
-curl.exe "$BASE/api/v1/reputation?phone=2025550111"
-curl.exe "$BASE/api/v1/complaints?phone=2025550111&limit=10&offset=0"
-curl.exe "$BASE/api/v1/spam-numbers?limit=10&offset=0"
-curl.exe "$BASE/api/v1/reputation?phone=abc"
-curl.exe "$BASE/api/v1/spam-numbers?from=2026-08-31&to=2026-08-01"
-```
-
 ## 7. Chất lượng và nguồn dữ liệu
 
 - Dữ liệu từ FTC Do Not Call / robocall complaints, được người dùng báo cáo và không phải từng report đều được FTC xác minh.
 - Complaint có cùng `ftcComplaintId` được upsert, không tạo duplicate khi source sync lại.
 - Số điện thoại không hợp lệ hoặc complaint không có ngày hợp lệ sẽ không được lưu.
 - Xem [BACKFILL.md](BACKFILL.md) để nạp dữ liệu FTC lịch sử trước khi vận hành scheduler hằng ngày.
+
+## 8. Postman
+
+Import hai file sau vào Postman:
+
+- [Collection](../postman/soosky-bot-spam-call.postman_collection.json)
+- [Local environment](../postman/soosky-bot-spam-call.local.postman_environment.json)
+
+Sau khi import, chọn environment `Soosky Bot Spam Call - Local` rồi gửi request. Để test production, duplicate environment và đổi `baseUrl` thành `https://project5.vuonghieu.site`; không thêm dấu `/` ở cuối URL.

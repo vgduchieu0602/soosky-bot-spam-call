@@ -44,7 +44,7 @@ Mặc định service đồng bộ lúc `13:00` theo `America/New_York`, có ch�
 
 ## Tóm tắt API
 
-API contract đầy đủ dành cho FE, QA và backend tích hợp: [docs-share/API.md](docs-share/API.md).
+API contract đầy đủ dành cho FE, QA và backend tích hợp: [docs-share/API.md](docs-share/API.md). Postman collection: [postman/soosky-bot-spam-call.postman_collection.json](postman/soosky-bot-spam-call.postman_collection.json).
 
 ### `GET /health`
 
