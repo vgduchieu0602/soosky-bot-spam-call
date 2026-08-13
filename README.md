@@ -42,7 +42,9 @@ Mặc định service đồng bộ lúc `13:00` theo `America/New_York`, có ch�
 - Bộ đếm nằm trong RAM của từng process. Chạy nhiều instance thì ngưỡng thực tế là `max × số instance`; cần ngưỡng dùng chung thì phải chuyển sang store ngoài (Redis).
 - `SIGTERM`/`SIGINT`: dừng scheduler và chờ lần sync đang chạy xong, đóng HTTP server nhưng vẫn để request đang xử lý hoàn tất (tối đa 10 giây), rồi mới `mongoose.disconnect()`. Quá 15 giây thì process tự exit `1`.
 
-## API cho FE
+## Tóm tắt API
+
+API contract đầy đủ dành cho FE, QA và backend tích hợp: [docs-share/API.md](docs-share/API.md).
 
 ### `GET /health`
 
@@ -100,7 +102,7 @@ Xem đầy đủ trong [.env.example](.env.example). Bắt buộc:
 - `MONGO_URI`
 - `FTC_API_KEY`
 
-Các biến cấu hình: `SYNC_TIME_ZONE`, `SYNC_HOUR`, `SYNC_MINUTE`, `SYNC_RUN_ON_BOOT`, `HEALTH_MAX_SYNC_AGE_HOURS`, `HTTP_PORT`, `HTTP_HOST`, `HTTP_CORS_ORIGIN`, `HTTP_TRUST_PROXY`. Riêng `HOST_PORT`, `MEM_LIMIT`, `NODE_MAX_OLD_SPACE_MB` chỉ Docker Compose dùng. Các hằng số kỹ thuật được cố định trong mã: lấy lại 3 ngày, timeout FTC 30 giây/retry 3 lần, rate limit 60 request/phút và graceful shutdown 10 giây.
+Các biến cấu hình: `SYNC_TIME_ZONE`, `SYNC_HOUR`, `SYNC_MINUTE`, `SYNC_RUN_ON_BOOT`, `HEALTH_MAX_SYNC_AGE_HOURS`, `HTTP_PORT`, `HTTP_HOST`, `HTTP_CORS_ORIGIN`, `HTTP_TRUST_PROXY`. Riêng `HOST_PORT` chỉ Docker Compose dùng. Các hằng số kỹ thuật được cố định trong mã: lấy lại 3 ngày, timeout FTC 30 giây/retry 3 lần, rate limit 60 request/phút và graceful shutdown 10 giây.
 
 ## Kiểm tra
 

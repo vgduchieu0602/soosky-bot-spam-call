@@ -35,7 +35,6 @@ services:
             HTTP_HOST: "0.0.0.0"
             HTTP_PORT: "3000"
             # Trần V8 heap, để V8 gom rác trước khi kernel OOM-kill.
-            NODE_OPTIONS: "--max-old-space-size=${NODE_MAX_OLD_SPACE_MB:-256}"
 
         healthcheck:
             # /health trả 503 NEVER_SYNCED tới khi lần sync FTC đầu tiên xong,
@@ -48,8 +47,6 @@ services:
 
         # App không cache dữ liệu trong RAM (chỉ map rate limit, tối đa vài MB) nên
         # nhẹ hơn soosky-storm-api. Node baseline ~80MB + Mongo pool 5.
-        mem_limit: ${MEM_LIMIT:-300m}
-        memswap_limit: ${MEM_LIMIT:-300m}
 
         security_opt:
             - "no-new-privileges:true"

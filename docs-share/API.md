@@ -1,40 +1,85 @@
-# FTC DNC API Contract
+# Spam Call Data API
 
-Base URL: `http://<host>:<port>`  
-Response envelope: success `{ "ok": true, "data": ... }`; error `{ "ok": false, "code": "...", "reason": "..." }`.
+Tài liệu này là API contract cho FE, QA và backend tích hợp. Service công bố dữ liệu khiếu nại cuộc gọi từ FTC đã được chuẩn hóa; service gọi API tự quyết định quy tắc chặn hoặc gắn nhãn spam.
 
-## Rate limit
+## 1. Thông tin chung
 
-Giới hạn theo IP, fixed window, cố định **60 request / 60 giây**. `GET /health` được miễn.
-
-| Header | Ý nghĩa |
+| Item | Giá trị |
 |---|---|
-| `RateLimit-Limit` | Số request tối đa trong window |
-| `RateLimit-Remaining` | Số request còn lại của window hiện tại |
-| `RateLimit-Reset` | Số giây tới khi window reset |
-| `Retry-After` | Chỉ có ở response `429`, số giây nên chờ |
+| Base URL local | `http://127.0.0.1:3000` |
+| Base URL production | URL do đội vận hành cung cấp |
+| Phiên bản API | `v1` |
+| Content type | `application/json` |
+| Authentication | Chưa có API key/JWT. Chỉ mở service cho các hệ thống được phép truy cập. |
+| Timezone dữ liệu | Mọi datetime trả về là ISO-8601 UTC, ví dụ `2026-08-12T15:00:00.000Z`. |
+| Ngày lọc | `YYYY-MM-DD`, tính theo UTC. `from` bắt đầu `00:00:00.000Z`; `to` kết thúc `23:59:59.999Z`. |
 
-**Output 429**
+### Response envelope
+
+Mọi response thành công:
 
 ```json
-{ "ok": false, "code": "RATE_LIMITED", "reason": "Too many requests. Retry in 42s." }
+{ "ok": true, "data": {} }
 ```
 
-Bộ đếm in-memory theo từng process, nên khi scale nhiều instance thì ngưỡng thực tế nhân theo số instance.
+Mọi response lỗi:
 
-## Data refresh
+```json
+{ "ok": false, "code": "ERROR_CODE", "reason": "Human-readable message." }
+```
 
-- Source: FTC DNC Reported Calls API (`GET /v0/dnc-complaints`), authenticated by `FTC_API_KEY` header. Không crawl HTML/web page.
-- Schedule: mỗi ngày lúc `13:00` theo `America/New_York` (cấu hình được); chạy ngay khi service khởi động nếu `SYNC_RUN_ON_BOOT=true`.
-- Mỗi lần lấy lại cố định 3 ngày gần nhất để không thiếu dữ liệu weekend/holiday.
-- Mongo collection: `ftc_dnc_complaints`; `ftcComplaintId` unique nên chạy lại không sinh duplicate.
-- Mongo collection: `ftc_sync_runs`; mỗi lần scheduler chạy ghi một document `running`, sau đó cập nhật `success` hoặc `failed` kèm `startedAt`, `completedAt`, `errorMessage`, `createdDateFrom`, `createdDateTo`, `fetched`, `accepted`, `inserted`, `updated`.
+### Chuẩn hóa số điện thoại
 
-## GET `/health`
+Các endpoint nhận `phone` chỉ hỗ trợ số US/NANP. Các format hợp lệ gồm:
 
-Dùng cho uptime monitor / load balancer probe. Healthy yêu cầu **cả hai**: Mongoose đang `connected`, và lần sync thành công cuối cùng còn mới hơn `HEALTH_MAX_SYNC_AGE_HOURS` (mặc định `48`).
+```text
+2025550111
+1 (202) 555-0111
++1 202 555 0111
+```
 
-**Output 200**
+Kết quả luôn dùng E.164: `+12025550111`.
+
+Khi truyền dấu `+` trong URL, FE phải encode thành `%2B` hoặc dùng `URLSearchParams`:
+
+```ts
+const query = new URLSearchParams({ phone: "+12025550111" });
+fetch(`/api/v1/reputation?${query}`);
+```
+
+## 2. Phân trang
+
+`/api/v1/complaints` và `/api/v1/spam-numbers` dùng offset pagination.
+
+| Query | Bắt buộc | Giá trị | Mặc định |
+|---|---:|---|---:|
+| `limit` | Không | Integer từ `1` đến `100` | `50` |
+| `offset` | Không | Integer từ `0` trở lên | `0` |
+
+- `total` là tổng số bản ghi hoặc số điện thoại thỏa điều kiện lọc, không phải độ dài của `items`.
+- `items` chỉ chứa trang hiện tại, có tối đa `limit` item.
+- Trang tiếp theo: `offset = offset + limit`.
+- Kết thúc khi `items.length === 0` hoặc `offset + items.length >= total`.
+
+Ví dụ với `total = 8697`, `limit = 100`:
+
+```text
+GET /api/v1/spam-numbers?limit=100&offset=0
+GET /api/v1/spam-numbers?limit=100&offset=100
+GET /api/v1/spam-numbers?limit=100&offset=200
+```
+
+## 3. Endpoints
+
+### 3.1 `GET /health`
+
+Mục đích: health check cho monitoring, load balancer hoặc Docker. FE không cần dùng endpoint này để hiển thị dữ liệu spam.
+
+Không có input. Endpoint này không bị rate limit.
+
+Điều kiện trả `200`: Mongo đang kết nối và lần FTC sync thành công gần nhất chưa quá `HEALTH_MAX_SYNC_AGE_HOURS`.
+
+**Response `200`**
 
 ```json
 {
@@ -42,51 +87,95 @@ Dùng cho uptime monitor / load balancer probe. Healthy yêu cầu **cả hai**:
   "data": {
     "status": "healthy",
     "mongo": "connected",
-    "lastSuccessfulSyncAt": "2026-08-12T06:00:00.000Z",
+    "lastSuccessfulSyncAt": "2026-08-12T15:00:00.000Z",
     "syncAgeSeconds": 3600
   }
 }
 ```
 
-`syncAgeSeconds` là số giây từ `lastSuccessfulSyncAt` (thời điểm `completedAt` của lần sync thành công gần nhất) đến lúc gọi.
-
-**Output 503**
+**Response `503` ví dụ**
 
 ```json
-{ "ok": false, "code": "STALE_DATA", "reason": "The last successful FTC sync is 180000s old and the allowed age is 48h." }
+{
+  "ok": false,
+  "code": "STALE_DATA",
+  "reason": "The last successful FTC sync is 180000s old and the allowed age is 48h."
+}
 ```
 
-| `code` | Nguyên nhân |
+| Code `503` | Ý nghĩa |
 |---|---|
-| `MONGO_DISCONNECTED` | Mongoose `readyState` = 0 |
-| `MONGO_CONNECTING` | Mongoose `readyState` = 2 |
-| `MONGO_DISCONNECTING` | Mongoose `readyState` = 3 |
-| `NEVER_SYNCED` | Chưa có lần sync FTC nào thành công |
-| `STALE_DATA` | Lần sync thành công cuối cùng cũ hơn `HEALTH_MAX_SYNC_AGE_HOURS` |
+| `MONGO_DISCONNECTED` | Mongo chưa kết nối. |
+| `MONGO_CONNECTING` | Mongo đang kết nối. |
+| `MONGO_DISCONNECTING` | Mongo đang ngắt kết nối. |
+| `NEVER_SYNCED` | Chưa có lần sync FTC thành công. |
+| `STALE_DATA` | Dữ liệu quá cũ theo ngưỡng cấu hình. |
 
-## GET `/api/v1/complaints`
+### 3.2 `GET /api/v1/reputation`
 
-Trả lịch sử khiếu nại của một số điện thoại, mới nhất trước. `total` là tổng số complaint thỏa bộ lọc, không chỉ số item của trang hiện tại.
+Mục đích: tra cứu nhanh một số điện thoại. Phù hợp cho backend cần quyết định số có nên được xem xét là spam hay không.
 
-### Input query
+| Query | Bắt buộc | Format | Ý nghĩa |
+|---|---:|---|---|
+| `phone` | Có | US/NANP phone | Số cần tra cứu. |
+| `from` | Không | `YYYY-MM-DD` | Chỉ tính complaint từ ngày này. |
+| `to` | Không | `YYYY-MM-DD` | Chỉ tính complaint đến ngày này. |
 
-| Field | Required | Format / default |
-|---|---:|---|
-| `phone` | Yes | US number: `2025550111`, `1 (202) 555-0111`, hoặc `%2B12025550111` |
-| `from` | No | `YYYY-MM-DD`, đầu ngày UTC |
-| `to` | No | `YYYY-MM-DD`, cuối ngày UTC |
-| `limit` | No | Integer `1..100`; default `50` |
-| `offset` | No | Integer `>=0`; default `0` |
-
-> Với dấu `+` trong URL, FE phải URL-encode thành `%2B` hoặc dùng `URLSearchParams`.
-
-**Example**
+**Chỉ truyền số điện thoại**
 
 ```text
-GET /api/v1/complaints?phone=%2B12025550111&from=2026-08-01&to=2026-08-31&limit=50&offset=0
+GET /api/v1/reputation?phone=2025550111
 ```
 
-### Output 200
+**Tra cứu theo khoảng thời gian**
+
+```text
+GET /api/v1/reputation?phone=%2B12025550111&from=2026-01-01&to=2026-12-31
+```
+
+**Response `200`**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "phoneNumber": "+12025550111",
+    "complaintCount": 4,
+    "lastComplaintAt": "2026-08-11T15:00:00.000Z"
+  }
+}
+```
+
+Nếu số chưa có complaint hoặc không có complaint trong khoảng lọc, vẫn trả `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "phoneNumber": "+12025550199",
+    "complaintCount": 0,
+    "lastComplaintAt": null
+  }
+}
+```
+
+### 3.3 `GET /api/v1/complaints`
+
+Mục đích: lấy lịch sử complaint chi tiết của một số. Kết quả sắp xếp mới nhất trước.
+
+| Query | Bắt buộc | Format / giới hạn | Mặc định |
+|---|---:|---|---:|
+| `phone` | Có | US/NANP phone | — |
+| `from` | Không | `YYYY-MM-DD` | — |
+| `to` | Không | `YYYY-MM-DD` | — |
+| `limit` | Không | `1..100` | `50` |
+| `offset` | Không | `>=0` | `0` |
+
+```text
+GET /api/v1/complaints?phone=2025550111&limit=50&offset=0
+```
+
+**Response `200`**
 
 ```json
 {
@@ -109,62 +198,45 @@ GET /api/v1/complaints?phone=%2B12025550111&from=2026-08-01&to=2026-08-31&limit=
 }
 ```
 
-### Errors for FE / Tester
+`consumerCity` và `consumerState` có thể là `null` khi FTC không cung cấp thông tin đó.
 
-| HTTP | `code` | When |
-|---:|---|---|
-| 400 | `MISSING_QUERY_PARAM` | Thiếu `phone` |
-| 400 | `INVALID_PHONE_NUMBER` | Phone không phải US NANP hợp lệ |
-| 400 | `INVALID_DATE` | `from` / `to` không phải ngày hợp lệ `YYYY-MM-DD` |
-| 400 | `INVALID_DATE_RANGE` | `from` sau `to` |
-| 400 | `INVALID_PAGINATION` | `limit` / `offset` không hợp lệ |
-| 404 | `NOT_FOUND` | Sai route |
-| 500 | `INTERNAL_ERROR` | Lỗi server |
+### 3.4 `GET /api/v1/spam-numbers`
 
-## GET `/api/v1/reputation`
+Mục đích: lấy danh sách số điện thoại có complaint trong database. Đây là endpoint phù hợp để backend khác đồng bộ danh sách số spam.
 
-Endpoint nội bộ để kiểm tra nhanh một số trước khi đưa vào pool. Nó không tự phân loại hoặc chặn số; service gọi tự áp ngưỡng phù hợp.
+Mặc định không truyền ngày sẽ trả tất cả số có ít nhất một complaint. Các số được gộp theo số điện thoại E.164:
 
-Input: `phone` bắt buộc, `from` và `to` tùy chọn với định dạng giống `/api/v1/complaints`. Không có phân trang.
+- `total`: số điện thoại duy nhất thỏa điều kiện.
+- `complaintCount`: tổng complaint của từng số trong điều kiện lọc.
+- Không phải tổng số document complaint trong Mongo.
+
+| Query | Bắt buộc | Format / giới hạn | Mặc định |
+|---|---:|---|---:|
+| `from` | Không | `YYYY-MM-DD` | — |
+| `to` | Không | `YYYY-MM-DD` | — |
+| `minComplaints` | Không | Integer `1..1000000` | `1` |
+| `limit` | Không | `1..100` | `50` |
+| `offset` | Không | `>=0` | `0` |
+
+**Lấy trang đầu của toàn bộ danh sách**
 
 ```text
-GET /api/v1/reputation?phone=%2B12025550111&from=2026-05-01
+GET /api/v1/spam-numbers?limit=100&offset=0
 ```
+
+**Chỉ lấy số có ít nhất 3 complaint kể từ đầu năm 2026**
+
+```text
+GET /api/v1/spam-numbers?from=2026-01-01&minComplaints=3&limit=100&offset=0
+```
+
+**Response `200`**
 
 ```json
 {
   "ok": true,
   "data": {
-    "phoneNumber": "+12025550111",
-    "complaintCount": 2,
-    "lastComplaintAt": "2026-08-10T16:23:11.000Z"
-  }
-}
-```
-
-`lastComplaintAt` là `null` nếu không có complaint trong khoảng lọc.
-
-## GET `/api/v1/spam-numbers`
-
-Trả danh sách số khác nhau đã có complaint trong database. Không truyền thời gian sẽ trả toàn bộ số; `from` và `to` chỉ là bộ lọc tùy chọn. Đây là endpoint để service tiêu thụ đồng bộ hoặc kiểm tra batch; bot chỉ công bố dữ liệu, không tự áp chính sách chặn số.
-
-| Query | Required | Default | Description |
-|---|---:|---:|---|
-| `from` | No | | `YYYY-MM-DD`, đầu ngày UTC |
-| `to` | No | | `YYYY-MM-DD`, cuối ngày UTC |
-| `minComplaints` | No | `1` | Số complaint tối thiểu, `1..1000000` |
-| `limit` | No | `50` | `1..100` |
-| `offset` | No | `0` | `>=0` |
-
-```text
-GET /api/v1/spam-numbers?minComplaints=1&limit=50&offset=0
-```
-
-```json
-{
-  "ok": true,
-  "data": {
-    "total": 2,
+    "total": 8697,
     "items": [
       {
         "phoneNumber": "+12025550111",
@@ -176,9 +248,79 @@ GET /api/v1/spam-numbers?minComplaints=1&limit=50&offset=0
 }
 ```
 
-## Data quality rules
+Kết quả sắp xếp theo `complaintCount` giảm dần, tiếp theo `lastComplaintAt` giảm dần, rồi `phoneNumber` tăng dần để pagination ổn định.
 
-- `company-phone-number`: bắt buộc; chỉ nhận 10 chữ số NANP hoặc 11 chữ số bắt đầu `1`; lưu chuẩn E.164 `+1xxxxxxxxxx`.
-- `created-date`: bắt buộc và phải parse được; lưu Mongo `Date` / API ISO-8601 UTC.
-- `consumer-city`, `consumer-state`: trim + gộp khoảng trắng; FTC cho phép để trống nên lưu `null` thay vì bịa dữ liệu.
-- Complaint ID trùng được upsert; các complaint ID khác nhau cùng một số vẫn được giữ để tổng hợp lịch sử chính xác.
+## 4. Error contract
+
+| HTTP | Code | Khi nào xảy ra |
+|---:|---|---|
+| `400` | `MISSING_QUERY_PARAM` | Thiếu query bắt buộc, ví dụ `phone`. |
+| `400` | `INVALID_PHONE_NUMBER` | `phone` không phải số US/NANP hợp lệ. |
+| `400` | `INVALID_DATE` | Ngày sai định dạng hoặc ngày không tồn tại. |
+| `400` | `INVALID_DATE_RANGE` | `from` sau `to`. |
+| `400` | `INVALID_PAGINATION` | `limit` hoặc `offset` không đúng giới hạn. |
+| `400` | `INVALID_MIN_COMPLAINTS` | `minComplaints` không thuộc `1..1000000`. |
+| `404` | `NOT_FOUND` | Sai method hoặc route. |
+| `429` | `RATE_LIMITED` | Vượt rate limit. |
+| `500` | `INTERNAL_ERROR` | Lỗi không mong đợi của server. |
+| `503` | Các code health | Chỉ áp dụng cho `/health`. |
+
+Ví dụ lỗi input:
+
+```text
+GET /api/v1/reputation?phone=abc
+```
+
+```json
+{
+  "ok": false,
+  "code": "INVALID_PHONE_NUMBER",
+  "reason": "Phone number must be a valid US NANP number."
+}
+```
+
+## 5. Rate limit và retry
+
+- Tất cả endpoint `/api/v1/*`: tối đa 60 request mỗi phút theo IP, theo từng process.
+- `GET /health` được miễn rate limit.
+- Các response API có header:
+  - `RateLimit-Limit`: quota tối đa trong cửa sổ hiện tại.
+  - `RateLimit-Remaining`: quota còn lại.
+  - `RateLimit-Reset`: số giây đến lúc quota reset.
+  - `Retry-After`: chỉ có khi response `429`.
+- Khi nhận `429`, client phải chờ số giây trong `Retry-After` trước khi retry.
+
+## 6. Kịch bản tích hợp đề xuất
+
+### FE: tra cứu một số
+
+1. Gọi `/api/v1/reputation?phone=<input>` khi người dùng bấm kiểm tra.
+2. Hiển thị `complaintCount` và `lastComplaintAt`.
+3. Nếu cần chi tiết, gọi `/api/v1/complaints` cùng `phone`.
+4. Với `400`, hiển thị lỗi input; với `429`, yêu cầu người dùng thử lại; với `500`, hiển thị lỗi hệ thống.
+
+### Backend: đồng bộ danh sách số
+
+1. Gọi `/api/v1/spam-numbers?limit=100&offset=0`.
+2. Lưu hoặc cập nhật từng `phoneNumber` theo khóa E.164.
+3. Tăng `offset` thêm 100 và lặp cho đến khi hết trang.
+4. Dùng `minComplaints` hoặc `from` nếu hệ thống đích cần ngưỡng/range riêng.
+
+### QA: kiểm thử nhanh
+
+```powershell
+$BASE = "http://127.0.0.1:3000"
+curl.exe "$BASE/health"
+curl.exe "$BASE/api/v1/reputation?phone=2025550111"
+curl.exe "$BASE/api/v1/complaints?phone=2025550111&limit=10&offset=0"
+curl.exe "$BASE/api/v1/spam-numbers?limit=10&offset=0"
+curl.exe "$BASE/api/v1/reputation?phone=abc"
+curl.exe "$BASE/api/v1/spam-numbers?from=2026-08-31&to=2026-08-01"
+```
+
+## 7. Chất lượng và nguồn dữ liệu
+
+- Dữ liệu từ FTC Do Not Call / robocall complaints, được người dùng báo cáo và không phải từng report đều được FTC xác minh.
+- Complaint có cùng `ftcComplaintId` được upsert, không tạo duplicate khi source sync lại.
+- Số điện thoại không hợp lệ hoặc complaint không có ngày hợp lệ sẽ không được lưu.
+- Xem [BACKFILL.md](BACKFILL.md) để nạp dữ liệu FTC lịch sử trước khi vận hành scheduler hằng ngày.
