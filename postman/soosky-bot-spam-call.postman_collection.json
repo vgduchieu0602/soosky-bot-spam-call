@@ -56,47 +56,6 @@
       "name": "Phone lookup",
       "item": [
         {
-          "name": "Reputation by phone",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/reputation?phone={{phone}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "reputation"],
-              "query": [{ "key": "phone", "value": "{{phone}}" }]
-            },
-            "description": "Requires only a US/NANP phone number. Returns complaintCount and lastComplaintAt. A number with no complaint returns 200 with complaintCount 0."
-          },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Returns reputation data', () => {",
-            "    pm.response.to.have.status(200);",
-            "    const data = pm.response.json().data;",
-            "    pm.expect(data).to.have.property('phoneNumber');",
-            "    pm.expect(data).to.have.property('complaintCount');",
-            "    pm.expect(data).to.have.property('lastComplaintAt');",
-            "});"
-          ] } }]
-        },
-        {
-          "name": "Reputation by phone and date range",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/reputation?phone={{phone}}&from={{from}}&to={{to}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "reputation"],
-              "query": [
-                { "key": "phone", "value": "{{phone}}" },
-                { "key": "from", "value": "{{from}}" },
-                { "key": "to", "value": "{{to}}" }
-              ]
-            },
-            "description": "Optional date range. from/to must be YYYY-MM-DD and from must not be after to."
-          }
-        },
-        {
           "name": "Complaint history by phone",
           "request": {
             "method": "GET",
@@ -109,17 +68,35 @@
                 { "key": "phone", "value": "{{phone}}" }
               ]
             },
-            "description": "Detailed complaints for one phone, newest first. The API returns all matching complaints; lastComplaintAt is the latest complaint in the selected range."
+            "description": "Returns the reputation summary (complaintCount, lastComplaintAt) and detailed complaints for one phone, newest first. The API returns all matching complaints."
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('Returns complete complaint history', () => {",
             "    pm.response.to.have.status(200);",
             "    const data = pm.response.json().data;",
-            "    pm.expect(data).to.have.property('total');",
+            "    pm.expect(data).to.have.property('complaintCount');",
             "    pm.expect(data.items).to.be.an('array');",
             "    pm.expect(data).to.have.property('lastComplaintAt');",
             "});"
           ] } }]
+        },
+        {
+          "name": "Complaint history by phone and date range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/complaints?phone={{phone}}&from={{from}}&to={{to}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "complaints"],
+              "query": [
+                { "key": "phone", "value": "{{phone}}" },
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to", "value": "{{to}}" }
+              ]
+            },
+            "description": "Optional date range. The response still contains complaintCount, lastComplaintAt, and all matching detailed complaints."
+          }
         }
       ]
     },
@@ -132,21 +109,23 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/spam-numbers?limit=100&offset=0",
+              "raw": "{{baseUrl}}/api/v1/spam-numbers?page=1&limit=100",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "spam-numbers"],
               "query": [
-                { "key": "limit", "value": "100" },
-                { "key": "offset", "value": "0" }
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "100" }
               ]
             },
-            "description": "All database data, paginated. total is the number of unique E.164 phone numbers, not the number of complaint documents."
+            "description": "All database data, paginated by page/limit. total is the number of unique E.164 phone numbers, not the number of complaint documents."
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('Returns a paginated number list', () => {",
             "    pm.response.to.have.status(200);",
             "    const data = pm.response.json().data;",
             "    pm.expect(data).to.have.property('total');",
+            "    pm.expect(data).to.have.property('page');",
+            "    pm.expect(data).to.have.property('totalPages');",
             "    pm.expect(data.items).to.be.an('array');",
             "    pm.expect(data.items.length).to.be.at.most(100);",
             "});"
@@ -158,15 +137,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/spam-numbers?from={{from}}&to={{to}}&minComplaints=3&limit=100&offset=0",
+              "raw": "{{baseUrl}}/api/v1/spam-numbers?from={{from}}&to={{to}}&minComplaints=3&page=1&limit=100",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "spam-numbers"],
               "query": [
                 { "key": "from", "value": "{{from}}" },
                 { "key": "to", "value": "{{to}}" },
                 { "key": "minComplaints", "value": "3" },
-                { "key": "limit", "value": "100" },
-                { "key": "offset", "value": "0" }
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "100" }
               ]
             },
             "description": "from/to and minComplaints are optional filters. Results are ordered by complaintCount descending, then lastComplaintAt descending."
@@ -178,15 +157,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/spam-numbers?limit=100&offset=100",
+              "raw": "{{baseUrl}}/api/v1/spam-numbers?page=2&limit=100",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "spam-numbers"],
               "query": [
-                { "key": "limit", "value": "100" },
-                { "key": "offset", "value": "100" }
+                { "key": "page", "value": "2" },
+                { "key": "limit", "value": "100" }
               ]
             },
-            "description": "Example of the next page. Increase offset by limit until offset + items.length >= total."
+            "description": "Example of the next page. Increase page by 1 until page is greater than totalPages."
           }
         }
       ]
@@ -235,7 +214,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/api/v1/reputation?phone=abc",
+            "url": "{{baseUrl}}/api/v1/complaints?phone=abc",
             "description": "Expected: 400 INVALID_PHONE_NUMBER."
           }
         },

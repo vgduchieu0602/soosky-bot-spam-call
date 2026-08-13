@@ -1,5 +1,5 @@
 import { AnyBulkWriteOperation } from "mongoose";
-import { ComplaintHistory, ComplaintReputation, DncComplaint, FindComplaintHistoryQuery, FindComplaintReputationQuery, FindSpamNumbersQuery, SearchPhoneNumbersQuery, SpamNumber, SpamNumberList, UpsertComplaintsResult } from "../../domain/entities/DncComplaint";
+import { ComplaintHistory, DncComplaint, FindComplaintHistoryQuery, FindSpamNumbersQuery, SearchPhoneNumbersQuery, SpamNumber, SpamNumberList, UpsertComplaintsResult } from "../../domain/entities/DncComplaint";
 import ComplaintRepository from "../../domain/repositories/ComplaintRepository";
 import DncComplaintModel, { DncComplaintDoc } from "./models/DncComplaintModel";
 
@@ -29,7 +29,7 @@ export default class MongoComplaintRepository implements ComplaintRepository {
 
     public async findHistory (query: FindComplaintHistoryQuery): Promise<ComplaintHistory> {
         const filter = this._filterFor(query);
-        const [total, docs] = await Promise.all([
+        const [complaintCount, docs] = await Promise.all([
             DncComplaintModel.countDocuments(filter),
             DncComplaintModel.find(filter)
                 .sort({ createdAt: -1, ftcComplaintId: -1 })
@@ -37,7 +37,7 @@ export default class MongoComplaintRepository implements ComplaintRepository {
         ]);
         return {
             phoneNumber: query.phoneNumber,
-            total,
+            complaintCount,
             lastComplaintAt: docs[0]?.createdAt || null,
             items: docs.map((doc) => ({
                 ftcComplaintId: doc.ftcComplaintId,
@@ -48,27 +48,6 @@ export default class MongoComplaintRepository implements ComplaintRepository {
                 consumerState: doc.consumerState,
                 sourceFetchedAt: doc.sourceFetchedAt,
             })),
-        };
-    }
-
-    public async findReputation (query: FindComplaintReputationQuery): Promise<ComplaintReputation> {
-        const [result] = await DncComplaintModel.aggregate<{
-            complaintCount: number;
-            lastComplaintAt: Date | null;
-        }>([
-            { $match: this._filterFor(query) },
-            {
-                $group: {
-                    _id: null,
-                    complaintCount: { $sum: 1 },
-                    lastComplaintAt: { $max: "$createdAt" },
-                },
-            },
-        ]);
-        return {
-            phoneNumber: query.phoneNumber,
-            complaintCount: result?.complaintCount || 0,
-            lastComplaintAt: result?.lastComplaintAt || null,
         };
     }
 

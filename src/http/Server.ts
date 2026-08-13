@@ -1,7 +1,6 @@
 import express, { NextFunction, Request, RequestHandler, Response } from "express";
 import type { Server as HttpServer } from "node:http";
 import GetComplaintHistoryUseCase from "../domain/use-cases/complaints/GetComplaintHistoryUseCase";
-import GetComplaintReputationUseCase from "../domain/use-cases/complaints/GetComplaintReputationUseCase";
 import ListSpamNumbersUseCase from "../domain/use-cases/complaints/ListSpamNumbersUseCase";
 import SearchPhoneNumbersUseCase from "../domain/use-cases/complaints/SearchPhoneNumbersUseCase";
 import HealthService from "./HealthService";
@@ -14,7 +13,6 @@ import ServiceUnhealthyError from "./ServiceUnhealthyError";
 export type ServerUseCases = {
     complaints: {
         getComplaintHistory: GetComplaintHistoryUseCase;
-        getComplaintReputation: GetComplaintReputationUseCase;
         listSpamNumbers: ListSpamNumbersUseCase;
         searchPhoneNumbers: SearchPhoneNumbersUseCase;
     };
@@ -39,7 +37,6 @@ class Server {
     private readonly _routes: [string, string, ...RequestHandler[]][] = [
         ["GET", "/health", this._GET_health.bind(this)],
         ["GET", "/api/v1/complaints", this._GET_complaints.bind(this)],
-        ["GET", "/api/v1/reputation", this._GET_reputation.bind(this)],
         ["GET", "/api/v1/spam-numbers", this._GET_spamNumbers.bind(this)],
         ["GET", "/api/v1/search", this._GET_searchPhoneNumbers.bind(this)],
     ];
@@ -171,31 +168,30 @@ class Server {
         res.json({ ok: true, data: formatResponseData(history) });
     }
 
-    private async _GET_reputation (req: Request, res: Response): Promise<void> {
-        const phoneNumber = this._requiredQueryString(req, "phone");
-        const from = this._optionalDate(req, "from", false);
-        const to = this._optionalDate(req, "to", true);
-        if (from && to && from > to) {
-            throw new ClientError("Query param 'from' must be on or before 'to'.", 400, "INVALID_DATE_RANGE");
-        }
-        const reputation = await this._useCases.complaints.getComplaintReputation.execute({ phoneNumber, from, to });
-        res.json({ ok: true, data: formatResponseData(reputation) });
-    }
-
     private async _GET_spamNumbers (req: Request, res: Response): Promise<void> {
         const from = this._optionalDate(req, "from", false);
         const to = this._optionalDate(req, "to", true);
         if (from && to && from > to) {
             throw new ClientError("Query param 'from' must be on or before 'to'.", 400, "INVALID_DATE_RANGE");
         }
+        const pagination = this._spamNumbersPagination(req);
         const result = await this._useCases.complaints.listSpamNumbers.execute({
             from,
             to,
             minComplaints: this._positiveInteger(req, "minComplaints", 1, 1000000, false, "INVALID_MIN_COMPLAINTS"),
-            limit: this._positiveInteger(req, "limit", 50, 100),
-            offset: this._positiveInteger(req, "offset", 0, Number.MAX_SAFE_INTEGER, true),
+            limit: pagination.limit,
+            offset: pagination.offset,
         });
-        res.json({ ok: true, data: formatResponseData(result) });
+        res.json({
+            ok: true,
+            data: formatResponseData({
+                page: pagination.page,
+                limit: pagination.limit,
+                total: result.total,
+                totalPages: Math.ceil(result.total / pagination.limit),
+                items: result.items,
+            }),
+        });
     }
 
     private async _GET_searchPhoneNumbers (req: Request, res: Response): Promise<void> {
@@ -252,5 +248,19 @@ class Server {
             throw new ClientError(`Query param '${key}' is outside its allowed range.`, 400, invalidCode);
         }
         return number;
+    }
+
+    private _spamNumbersPagination (req: Request): { page: number; limit: number; offset: number } {
+        if (req.query.page !== undefined && req.query.offset !== undefined) {
+            throw new ClientError("Use either query param 'page' or 'offset', not both.", 400, "INVALID_PAGINATION");
+        }
+        const limit = this._positiveInteger(req, "limit", 50, 100);
+        if (req.query.offset !== undefined) {
+            const offset = this._positiveInteger(req, "offset", 0, Number.MAX_SAFE_INTEGER, true);
+            return { page: Math.floor(offset / limit) + 1, limit, offset };
+        }
+        const maximumPage = Math.floor(Number.MAX_SAFE_INTEGER / limit) + 1;
+        const page = this._positiveInteger(req, "page", 1, maximumPage);
+        return { page, limit, offset: (page - 1) * limit };
     }
 }

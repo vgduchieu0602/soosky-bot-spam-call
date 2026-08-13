@@ -42,32 +42,36 @@ Kết quả luôn dùng E.164: `+12025550111`.
 
 ```ts
 const query = new URLSearchParams({ phone: "+12025550111" });
-fetch(`/api/v1/reputation?${query}`);
+fetch(`/api/v1/complaints?${query}`);
 ```
 
 ## 2. Phân trang
 
-Chỉ `/api/v1/spam-numbers` dùng offset pagination. `/api/v1/complaints` và `/api/v1/search` do backend xử lý toàn bộ kết quả, client không truyền `limit` hoặc `offset`.
+Chỉ `/api/v1/spam-numbers` có phân trang. `/api/v1/complaints` và `/api/v1/search` do backend xử lý toàn bộ kết quả, client không truyền `limit`, `page` hoặc `offset`.
 
 | Query | Bắt buộc | Giá trị | Mặc định |
 |---|---:|---|---:|
+| `page` | Không | Integer từ `1` trở lên | `1` |
 | `limit` | Không | Integer từ `1` đến `100` | `50` |
-| `offset` | Không | Integer từ `0` trở lên | `0` |
+| `offset` | Không | Integer từ `0` trở lên | — (chỉ tương thích client cũ) |
 
 - `total` là tổng số bản ghi hoặc số điện thoại thỏa điều kiện lọc, không phải độ dài của `items`.
 - `items` chỉ chứa trang hiện tại, có tối đa `limit` item.
-- Trang tiếp theo: `offset = offset + limit`.
-- Kết thúc khi `items.length === 0` hoặc `offset + items.length >= total`.
+- `totalPages = ceil(total / limit)`.
+- FE gửi `page` bắt đầu từ `1`; backend tự tính `offset = (page - 1) × limit`.
+- Không gửi đồng thời `page` và `offset`. `offset` được giữ tạm thời cho client cũ.
 
 Ví dụ với `total = 8697`, `limit = 100`:
 
 ```text
-GET /api/v1/spam-numbers?limit=100&offset=0
-GET /api/v1/spam-numbers?limit=100&offset=100
-GET /api/v1/spam-numbers?limit=100&offset=200
+GET /api/v1/spam-numbers?page=1&limit=100
+GET /api/v1/spam-numbers?page=2&limit=100
+GET /api/v1/spam-numbers?page=3&limit=100
 ```
 
 ## 3. Endpoints
+
+`GET /api/v1/reputation` đã bị xóa. Dùng `GET /api/v1/complaints` để lấy cả thông tin reputation và lịch sử chi tiết trong một request.
 
 ### 3.1 `GET /health`
 
@@ -105,55 +109,7 @@ GET /api/v1/spam-numbers?limit=100&offset=200
 | `NEVER_SYNCED` | Chưa có lần sync FTC thành công. |
 | `STALE_DATA` | Dữ liệu quá cũ theo ngưỡng cấu hình. |
 
-### 3.2 `GET /api/v1/reputation`
-
-Mục đích: tra cứu nhanh một số điện thoại. Phù hợp cho backend cần quyết định số có nên được xem xét là spam hay không.
-
-| Query | Bắt buộc | Format | Ý nghĩa |
-|---|---:|---|---|
-| `phone` | Có | US/NANP phone | Số cần tra cứu. |
-| `from` | Không | `YYYY-MM-DD` | Chỉ tính complaint từ ngày này. |
-| `to` | Không | `YYYY-MM-DD` | Chỉ tính complaint đến ngày này. |
-
-**Chỉ truyền số điện thoại**
-
-```text
-GET /api/v1/reputation?phone=2025550111
-```
-
-**Tra cứu theo khoảng thời gian**
-
-```text
-GET /api/v1/reputation?phone=%2B12025550111&from=2026-01-01&to=2026-12-31
-```
-
-**Response `200`**
-
-```json
-{
-  "ok": true,
-  "data": {
-    "phoneNumber": "+12025550111",
-    "complaintCount": 4,
-    "lastComplaintAt": "2026-08-11T15:00:00.000Z"
-  }
-}
-```
-
-Nếu số chưa có complaint hoặc không có complaint trong khoảng lọc, vẫn trả `200`:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "phoneNumber": "+12025550199",
-    "complaintCount": 0,
-    "lastComplaintAt": null
-  }
-}
-```
-
-### 3.3 `GET /api/v1/complaints`
+### 3.2 `GET /api/v1/complaints`
 
 Mục đích: lấy lịch sử complaint chi tiết của một số. Kết quả sắp xếp mới nhất trước.
 
@@ -174,7 +130,7 @@ GET /api/v1/complaints?phone=2025550111
   "ok": true,
   "data": {
     "phoneNumber": "+12025550111",
-    "total": 2,
+    "complaintCount": 2,
     "lastComplaintAt": "2026-08-10T16:23:11.000Z",
     "items": [
       {
@@ -191,9 +147,9 @@ GET /api/v1/complaints?phone=2025550111
 }
 ```
 
-`lastComplaintAt` là complaint mới nhất trong toàn bộ kết quả lọc. `consumerCity` và `consumerState` có thể là `null` khi FTC không cung cấp thông tin đó.
+`complaintCount` và `lastComplaintAt` là thông tin reputation của số trong toàn bộ kết quả lọc. `items` là lịch sử chi tiết, sắp xếp mới nhất trước. Nếu số chưa có complaint trong khoảng lọc, API trả `complaintCount: 0`, `lastComplaintAt: null` và `items: []`. `consumerCity` và `consumerState` có thể là `null` khi FTC không cung cấp thông tin đó.
 
-### 3.4 `GET /api/v1/spam-numbers`
+### 3.3 `GET /api/v1/spam-numbers`
 
 Mục đích: lấy danh sách số điện thoại có complaint trong database. 
 
@@ -208,19 +164,20 @@ Mặc định không truyền ngày sẽ trả tất cả số có ít nhất m�
 | `from` | Không | `YYYY-MM-DD` | — |
 | `to` | Không | `YYYY-MM-DD` | — |
 | `minComplaints` | Không | Integer `1..1000000` | `1` |
+| `page` | Không | Integer `>=1` | `1` |
 | `limit` | Không | `1..100` | `50` |
-| `offset` | Không | `>=0` | `0` |
+| `offset` | Không | `>=0`, chỉ cho client cũ; không dùng cùng `page` | — |
 
 **Lấy trang đầu của toàn bộ danh sách**
 
 ```text
-GET /api/v1/spam-numbers?limit=100&offset=0
+GET /api/v1/spam-numbers?page=1&limit=100
 ```
 
 **Chỉ lấy số có ít nhất 3 complaint kể từ đầu năm 2026**
 
 ```text
-GET /api/v1/spam-numbers?from=2026-01-01&minComplaints=3&limit=100&offset=0
+GET /api/v1/spam-numbers?from=2026-01-01&minComplaints=3&page=1&limit=100
 ```
 
 **Response `200`**
@@ -229,7 +186,10 @@ GET /api/v1/spam-numbers?from=2026-01-01&minComplaints=3&limit=100&offset=0
 {
   "ok": true,
   "data": {
+    "page": 1,
+    "limit": 50,
     "total": 8697,
+    "totalPages": 174,
     "items": [
       {
         "phoneNumber": "+12025550111",
@@ -243,7 +203,7 @@ GET /api/v1/spam-numbers?from=2026-01-01&minComplaints=3&limit=100&offset=0
 
 Kết quả sắp xếp theo `complaintCount` giảm dần, tiếp theo `lastComplaintAt` giảm dần, rồi `phoneNumber` tăng dần để pagination ổn định.
 
-### 3.5 `GET /api/v1/search`
+### 3.4 `GET /api/v1/search`
 
 Mục đích: tìm một phần số điện thoại trong kho số spam. Endpoint phù hợp cho ô tìm kiếm FE hoặc backend cần tìm các số chứa một chuỗi chữ số. Không phân trang: backend trả toàn bộ số khớp.
 
@@ -285,7 +245,7 @@ GET /api/v1/search?phone=01234
 | `400` | `INVALID_PHONE_NUMBER` | `phone` không phải số US/NANP hợp lệ. |
 | `400` | `INVALID_DATE` | Ngày sai định dạng hoặc ngày không tồn tại. |
 | `400` | `INVALID_DATE_RANGE` | `from` sau `to`. |
-| `400` | `INVALID_PAGINATION` | `limit` hoặc `offset` không đúng giới hạn. |
+| `400` | `INVALID_PAGINATION` | `page`, `limit` hoặc `offset` không đúng giới hạn; hoặc gửi cả `page` và `offset`. |
 | `400` | `INVALID_MIN_COMPLAINTS` | `minComplaints` không thuộc `1..1000000`. |
 | `400` | `INVALID_PHONE_SEARCH` | `phone` của `/api/v1/search` không có từ 3 đến 15 chữ số. |
 | `404` | `NOT_FOUND` | Sai method hoặc route. |
@@ -296,7 +256,7 @@ GET /api/v1/search?phone=01234
 Ví dụ lỗi input:
 
 ```text
-GET /api/v1/reputation?phone=abc
+GET /api/v1/complaints?phone=abc
 ```
 
 ```json
@@ -322,10 +282,9 @@ GET /api/v1/reputation?phone=abc
 
 ### FE: tra cứu một số
 
-1. Gọi `/api/v1/reputation?phone=<input>` khi người dùng bấm kiểm tra.
-2. Hiển thị `complaintCount` và `lastComplaintAt`.
-3. Nếu cần chi tiết, gọi `/api/v1/complaints` cùng `phone`.
-4. Với `400`, hiển thị lỗi input; với `429`, yêu cầu người dùng thử lại; với `500`, hiển thị lỗi hệ thống.
+1. Gọi `/api/v1/complaints?phone=<input>` khi người dùng bấm kiểm tra.
+2. Hiển thị `complaintCount`, `lastComplaintAt` và `items` từ cùng một response.
+3. Với `400`, hiển thị lỗi input; với `429`, yêu cầu người dùng thử lại; với `500`, hiển thị lỗi hệ thống.
 
 ### FE: tìm theo một phần số
 
@@ -334,19 +293,18 @@ GET /api/v1/reputation?phone=abc
 
 ### Backend: đồng bộ danh sách số
 
-1. Gọi `/api/v1/spam-numbers?limit=100&offset=0`.
+1. Gọi `/api/v1/spam-numbers?page=1&limit=100`.
 2. Lưu hoặc cập nhật từng `phoneNumber` theo khóa E.164.
-3. Tăng `offset` thêm 100 và lặp cho đến khi hết trang.
+3. Tăng `page` thêm 1 và lặp cho đến khi `page > totalPages`.
 4. Dùng `minComplaints` hoặc `from` nếu hệ thống đích cần ngưỡng/range riêng.
 
 ### QA: kiểm thử nhanh
 
 ```powershell
 $BASE = "http://127.0.0.1:3000"
-curl.exe "$BASE/api/v1/reputation?phone=2025550111"
 curl.exe "$BASE/api/v1/complaints?phone=2025550111"
 curl.exe "$BASE/api/v1/search?phone=01234"
-curl.exe "$BASE/api/v1/spam-numbers?limit=10&offset=0"
+curl.exe "$BASE/api/v1/spam-numbers?page=1&limit=10"
 curl.exe "$BASE/api/v1/search?phone=12"
 ```
 

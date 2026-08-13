@@ -18,15 +18,9 @@ export interface DncComplaint {
 
 export type ComplaintHistory = {
     phoneNumber: string;
-    total: number;
-    lastComplaintAt: Date | null;
-    items: DncComplaint[];
-};
-
-export type ComplaintReputation = {
-    phoneNumber: string;
     complaintCount: number;
     lastComplaintAt: Date | null;
+    items: DncComplaint[];
 };
 
 export type SpamNumber = {
@@ -50,8 +44,6 @@ export type FindComplaintHistoryQuery = {
     from?: Date;
     to?: Date;
 };
-
-export type FindComplaintReputationQuery = FindComplaintHistoryQuery;
 
 export type FindSpamNumbersQuery = {
     from?: Date;

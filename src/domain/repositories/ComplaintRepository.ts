@@ -1,9 +1,7 @@
 import {
     ComplaintHistory,
-    ComplaintReputation,
     DncComplaint,
     FindComplaintHistoryQuery,
-    FindComplaintReputationQuery,
     FindSpamNumbersQuery,
     SearchPhoneNumbersQuery,
     SpamNumberList,
@@ -13,7 +11,6 @@ import {
 export default interface ComplaintRepository {
     upsertMany (complaints: DncComplaint[]): Promise<UpsertComplaintsResult>;
     findHistory (query: FindComplaintHistoryQuery): Promise<ComplaintHistory>;
-    findReputation (query: FindComplaintReputationQuery): Promise<ComplaintReputation>;
     findSpamNumbers (query: FindSpamNumbersQuery): Promise<SpamNumberList>;
     searchPhoneNumbers (query: SearchPhoneNumbersQuery): Promise<SpamNumberList>;
 }
