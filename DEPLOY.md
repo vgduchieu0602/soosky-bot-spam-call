@@ -110,12 +110,12 @@ docker compose ps        # STATUS healthy sau khi sync đầu tiên xong
 
 ## 4. nginx + HTTPS
 
-Domain mẫu trong file config: **project4.vuonghieu.site** — đổi nếu dùng domain khác.
+Domain cấu hình trong file nginx: **project5.vuonghieu.site**.
 
 Trỏ DNS trước: record **A** cho domain → IP của VPS. Kiểm tra:
 
 ```bash
-dig +short project4.vuonghieu.site      # phải ra IP VPS
+dig +short project5.vuonghieu.site      # phải ra IP VPS
 ```
 
 Copy config:
@@ -131,14 +131,14 @@ sudo systemctl reload nginx
 Test HTTP trước khi lấy chứng chỉ:
 
 ```bash
-curl -I http://project4.vuonghieu.site/health      # 200 hoặc 503, miễn không phải 502
+curl -I http://project5.vuonghieu.site/health      # 200 hoặc 503, miễn không phải 502
 ```
 
 Lấy HTTPS:
 
 ```bash
-sudo certbot --nginx -d project4.vuonghieu.site
-curl -s https://project4.vuonghieu.site/health
+sudo certbot --nginx -d project5.vuonghieu.site
+curl -s https://project5.vuonghieu.site/health
 ```
 
 certbot tự thêm block `listen 443` + chứng chỉ vào file, và tự gia hạn qua systemd timer. Kiểm tra: `systemctl list-timers | grep certbot`. Giữ block `listen 80` — ACME challenge cần nó để renew.
@@ -158,7 +158,7 @@ Docker ghi iptables trực tiếp và bỏ qua ufw — đó là lý do compose b
 ## 5. Kiểm tra
 
 ```bash
-BASE=https://project4.vuonghieu.site
+BASE=https://project5.vuonghieu.site
 
 curl -s $BASE/health | jq
 curl -s "$BASE/api/v1/spam-numbers?from=2026-08-01&limit=5" | jq
